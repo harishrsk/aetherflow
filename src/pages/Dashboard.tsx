@@ -24,12 +24,13 @@ import {
 
 interface DashboardProps {
   onLogout: () => void;
+  onOpenAuth: () => void;
 }
 
 type TabType = 'writer' | 'studio' | 'calendar' | 'analytics';
 
-export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
-  const { user, apiKey, setApiKey } = useApp();
+export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) => {
+  const { user, apiKey, setApiKey, sessionUser } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('writer');
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
   const [selectedWorkspace, setSelectedWorkspace] = useState('My Hub');
@@ -223,13 +224,40 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             <div style={avatarStyle}>
               <User size={14} color="#ffffff" />
             </div>
-            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600 }}>{user.name}</div>
-              <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{user.email}</div>
-            </div>
-            <button onClick={onLogout} style={logoutButtonStyle} title="Sign Out">
-              <LogOut size={14} />
-            </button>
+            {sessionUser ? (
+              <>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600 }}>{user.name}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{user.email}</div>
+                </div>
+                <button onClick={onLogout} style={logoutButtonStyle} title="Sign Out">
+                  <LogOut size={14} />
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600 }}>Guest Sandbox</div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Progress not saved</div>
+                </div>
+                <button 
+                  onClick={onOpenAuth} 
+                  style={{
+                    background: 'rgba(139, 92, 246, 0.15)',
+                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                    color: 'var(--color-primary)',
+                    borderRadius: '6px',
+                    padding: '4px 8px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    outline: 'none'
+                  }}
+                >
+                  Sign In
+                </button>
+              </>
+            )}
           </div>
         </div>
       </aside>

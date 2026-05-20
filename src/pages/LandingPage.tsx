@@ -15,10 +15,11 @@ import {
 
 interface LandingPageProps {
   onEnterApp: () => void;
+  onOpenAuth: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
-  const { user } = useApp();
+export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp, onOpenAuth }) => {
+  const { sessionUser } = useApp();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [demoPrompt, setDemoPrompt] = useState('An eco-friendly, double-walled stainless steel water bottle that keeps drinks cold for 48 hours.');
@@ -101,9 +102,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
           <a href="#faq" style={navLinkStyle}>FAQ</a>
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={onEnterApp} className="btn btn-secondary">
-            {user.tier === 'premium' ? 'Dashboard' : 'Sign In'}
-          </button>
+          {sessionUser ? (
+            <button onClick={onEnterApp} className="btn btn-secondary">
+              Dashboard
+            </button>
+          ) : (
+            <button onClick={onOpenAuth} className="btn btn-secondary">
+              Sign In
+            </button>
+          )}
           <button onClick={() => setIsCheckoutOpen(true)} className="btn btn-primary">
             Upgrade Pro
           </button>
