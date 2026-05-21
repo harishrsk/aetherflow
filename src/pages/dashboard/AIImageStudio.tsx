@@ -56,30 +56,7 @@ export const AIImageStudio: React.FC = () => {
     return promptStr.replace(/^\[Parent:\s*[^\]]+\]\s*/, '');
   };
 
-  const getSimulatedVariantImage = (parentPrompt: string, _tweak: string): string => {
-    const key = parentPrompt.toLowerCase();
-    
-    if (key.includes('office') || key.includes('workspace') || key.includes('desk') || key.includes('computer')) {
-      return 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80';
-    }
-    if (key.includes('aurora') || key.includes('mountain') || key.includes('landscape') || key.includes('sky')) {
-      return 'https://images.unsplash.com/photo-1475274047050-1d0c0975c63e?auto=format&fit=crop&w=800&q=80';
-    }
-    if (key.includes('brain') || key.includes('cyber') || key.includes('tech') || key.includes('ai')) {
-      return 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80';
-    }
-    if (key.includes('skincare') || key.includes('cosmetics') || key.includes('product') || key.includes('minimal')) {
-      return 'https://images.unsplash.com/photo-1608248597481-496100c8c836?auto=format&fit=crop&w=800&q=80';
-    }
-    
-    const variantsPool = [
-      'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1604871000636-074fa5117945?auto=format&fit=crop&w=800&q=80'
-    ];
-    return variantsPool[Math.floor(Math.random() * variantsPool.length)];
-  };
+
 
   const handleGenerateVariant = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,6 +74,14 @@ export const AIImageStudio: React.FC = () => {
     consumeCredits(5);
     setGeneratingVariantParentId(parentId);
     setVariantTargetImage(null);
+
+    const seed = Math.floor(Math.random() * 1000000);
+    const combinedPrompt = `${parentPrompt}, tweak: ${styleTweak}, style: ${parentStyle}`;
+    const variantUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(combinedPrompt)}?width=800&height=800&nologo=true&seed=${seed}`;
+
+    // Preload variant image to browser cache for seamless transition
+    const imgPreload = new Image();
+    imgPreload.src = variantUrl;
 
     const steps = [
       'Regenerating style tokens...',
@@ -116,7 +101,6 @@ export const AIImageStudio: React.FC = () => {
       } else {
         clearInterval(interval);
         
-        const variantUrl = getSimulatedVariantImage(parentPrompt, styleTweak);
         const encodedPrompt = `[Parent: ${parentId}] ${parentPrompt} (Tweak: ${styleTweak})`;
         
         addStudioImage(encodedPrompt, parentStyle, variantUrl);
@@ -126,32 +110,6 @@ export const AIImageStudio: React.FC = () => {
     }, 1000);
   };
 
-
-  // Unsplash images mapped to prompt keywords to simulate a real image generator!
-  const getSimulatedImage = (promptText: string): string => {
-    const key = promptText.toLowerCase();
-    if (key.includes('office') || key.includes('workspace') || key.includes('desk') || key.includes('computer')) {
-      return 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80'; // developer desk
-    }
-    if (key.includes('aurora') || key.includes('mountain') || key.includes('landscape') || key.includes('sky')) {
-      return 'https://images.unsplash.com/photo-1579033461380-adb47c3eb938?auto=format&fit=crop&w=800&q=80'; // starry night
-    }
-    if (key.includes('brain') || key.includes('cyber') || key.includes('tech') || key.includes('ai')) {
-      return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80'; // tech neon lines
-    }
-    if (key.includes('skincare') || key.includes('cosmetics') || key.includes('product') || key.includes('minimal')) {
-      return 'https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=800&q=80'; // product shoot
-    }
-    
-    // Default pool of stunning abstract images
-    const defaultPool = [
-      'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=800&q=80', // fluid 3d shape
-      'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=800&q=80', // abstract light paint
-      'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80', // neon shapes
-      'https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?auto=format&fit=crop&w=800&q=80'  // abstract space dust
-    ];
-    return defaultPool[Math.floor(Math.random() * defaultPool.length)];
-  };
 
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,6 +128,15 @@ export const AIImageStudio: React.FC = () => {
       return;
     }
 
+    const aspectParams = aspectRatio === '16:9' ? 'width=1024&height=576' : aspectRatio === '9:16' ? 'width=576&height=1024' : 'width=800&height=800';
+    const seed = Math.floor(Math.random() * 1000000);
+    const finalStyle = selectedStyle ? `${selectedStyle} style` : '';
+    const generatedUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + (finalStyle ? ', ' + finalStyle : ''))}?${aspectParams}&nologo=true&seed=${seed}`;
+
+    // Preload generated image to browser cache
+    const imgPreload = new Image();
+    imgPreload.src = generatedUrl;
+
     const steps = [
       { progress: 20, msg: 'Connecting to Stable Diffusion latent nodes...' },
       { progress: 45, msg: 'Generating latent noise mapping grid...' },
@@ -187,7 +154,6 @@ export const AIImageStudio: React.FC = () => {
       } else {
         clearInterval(interval);
         setTimeout(() => {
-          const generatedUrl = getSimulatedImage(prompt);
           addStudioImage(prompt, selectedStyle, generatedUrl);
           setIsGenerating(false);
         }, 600);
