@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../utils/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { Sparkles, Mail, Lock, AlertCircle, Check } from 'lucide-react';
 
 interface AuthModalProps {
@@ -21,6 +21,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     e.preventDefault();
     if (!email.trim() || !password.trim() || isLoading) return;
 
+    if (!isSupabaseConfigured) {
+      setErrorMsg('Authentication is disabled because Supabase is not configured.');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -29,7 +34,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       if (mode === 'signup') {
         const { error, data } = await supabase.auth.signUp({
           email,
-          password
+          password,
+          options: {
+            emailRedirectTo: window.location.origin
+          }
         });
         
         if (error) throw error;
@@ -53,7 +61,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         }, 1000);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'An error occurred during authentication.');
+      if (err.message === 'Failed to fetch' || err.message?.includes('fetch')) {
+        setErrorMsg('Could not establish database connection. Please check your network connection or verify that VITE_SUPABASE_URL is correct.');
+      } else {
+        setErrorMsg(err.message || 'An error occurred during authentication.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -81,6 +93,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               ? 'Enter credentials to load synced creative files and credit balances.' 
               : 'Sign up to receive 50 free cloud credits and setup calendar sync.'}
           </p>
+
+          {!isSupabaseConfigured && (
+            <div style={{
+              background: 'rgba(245, 158, 11, 0.08)',
+              border: '1px solid rgba(245, 158, 11, 0.2)',
+              color: '#fef08a',
+              borderRadius: '8px',
+              padding: '12px',
+              fontSize: '11px',
+              marginBottom: '15px',
+              lineHeight: '1.4',
+              textAlign: 'left'
+            }}>
+              <strong>⚠️ Database Sandbox Mode Active</strong>
+              <br />
+              Supabase environment variables are not configured. Authenticating and syncing accounts is disabled. To enable, configure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in AWS Amplify or your <code>.env</code> file.
+            </div>
+          )}
 
           <div className="form-group" style={{ position: 'relative' }}>
             <label className="form-label">Email Address</label>
@@ -132,7 +162,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             type="submit" 
             className="btn btn-primary"
             style={{ width: '100%', padding: '12px', marginTop: '10px' }}
-            disabled={isLoading || !email.trim() || !password.trim()}
+            disabled={isLoading || !email.trim() || !password.trim() || !isSupabaseConfigured}
           >
             {isLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>

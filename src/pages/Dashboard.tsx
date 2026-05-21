@@ -30,7 +30,7 @@ interface DashboardProps {
 type TabType = 'writer' | 'studio' | 'calendar' | 'analytics';
 
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) => {
-  const { user, apiKey, setApiKey, sessionUser } = useApp();
+  const { user, apiKey, setApiKey, sessionUser, toast, clearToast } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('writer');
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
   const [selectedWorkspace, setSelectedWorkspace] = useState('My Hub');
@@ -304,6 +304,62 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
 
       {/* Stripe Payment Modal */}
       <CheckoutModal isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} />
+
+      {/* Toast Notification Banner */}
+      {toast && (
+        <div 
+          onClick={clearToast}
+          className="glass animate-slide-up"
+          style={{
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            zIndex: 3000,
+            padding: '16px 20px',
+            maxWidth: '360px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            cursor: 'pointer',
+            background: 'rgba(10, 10, 16, 0.95)',
+            borderLeft: `4px solid ${toast.type === 'error' ? 'var(--danger)' : toast.type === 'warning' ? 'var(--warning)' : 'var(--success)'}`,
+            boxShadow: '0 20px 40px -15px rgba(0,0,0,0.7)',
+            borderRadius: '12px',
+            color: 'var(--text-primary)',
+            fontSize: '13px',
+            lineHeight: '1.4'
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '24px',
+            height: '24px',
+            borderRadius: '50%',
+            background: toast.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : toast.type === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+            color: toast.type === 'error' ? 'var(--danger)' : toast.type === 'warning' ? 'var(--warning)' : 'var(--success)',
+            flexShrink: 0
+          }}>
+            {toast.type === 'error' ? '✕' : toast.type === 'warning' ? '⚠️' : '✓'}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+              {toast.type === 'error' ? 'System Error' : toast.type === 'warning' ? 'System Warning' : 'Success Notification'}
+            </div>
+            {toast.message}
+          </div>
+          <button style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            fontSize: '16px',
+            padding: '0 4px',
+            lineHeight: 1
+          }}>×</button>
+        </div>
+      )}
     </div>
   );
 };

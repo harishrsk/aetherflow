@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../utils/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 export interface UserProfile {
@@ -35,6 +35,11 @@ export interface CalendarEventItem {
   status: 'scheduled' | 'posted';
 }
 
+export interface ToastMessage {
+  message: string;
+  type: 'error' | 'success' | 'warning';
+}
+
 interface AppContextType {
   user: UserProfile;
   writerHistory: WriterHistoryItem[];
@@ -42,6 +47,10 @@ interface AppContextType {
   calendarEvents: CalendarEventItem[];
   apiKey: string;
   sessionUser: SupabaseUser | null;
+  toast: ToastMessage | null;
+  isSupabaseReady: boolean;
+  clearToast: () => void;
+  showToast: (message: string, type: 'error' | 'success' | 'warning') => void;
   setApiKey: (key: string) => void;
   upgradeToPremium: () => void;
   consumeCredits: (amount: number) => boolean;
@@ -65,6 +74,17 @@ export const useApp = () => {
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sessionUser, setSessionUser] = useState<SupabaseUser | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  const showToast = (message: string, type: 'error' | 'success' | 'warning') => {
+    setToast({ message, type });
+    // Auto-dismiss toast in 5 seconds
+    setTimeout(() => {
+      setToast(prev => prev?.message === message ? null : prev);
+    }, 5000);
+  };
+
+  const clearToast = () => setToast(null);
   
   const [user, setUser] = useState<UserProfile>({
     name: 'Demo Founder',
@@ -109,12 +129,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 1. Setup Session Listener & Load Data from Supabase
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      console.warn('Supabase client using placeholder credentials.');
+      return;
+    }
+
     // Check initial auth state
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setSessionUser(session.user);
         loadUserData(session.user);
       }
+    }).catch(err => {
+      console.error('Failed to get initial session', err);
     });
 
     // Listen for auth state changes
@@ -156,7 +183,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .single();
 
       if (profileErr && profileErr.code !== 'PGRST116') {
-        console.error(profileErr);
+        throw profileErr;
       }
 
       if (profile) {
@@ -180,11 +207,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // Fetch Writer History
-      const { data: writerData } = await supabase
+      const { data: writerData, error: writerErr } = await supabase
         .from('writer_history')
         .select('*')
         .eq('user_id', supabaseUser.id)
         .order('timestamp', { ascending: false });
+
+      if (writerErr) throw writerErr;
 
       if (writerData) {
         setWriterHistory(writerData.map(item => ({
@@ -197,11 +226,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // Fetch Studio Images
-      const { data: imageData } = await supabase
+      const { data: imageData, error: imageErr } = await supabase
         .from('studio_images')
         .select('*')
         .eq('user_id', supabaseUser.id)
         .order('timestamp', { ascending: false });
+
+      if (imageErr) throw imageErr;
 
       if (imageData) {
         setStudioImages(imageData.map(img => ({
@@ -214,10 +245,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // Fetch Calendar Events
-      const { data: calendarData } = await supabase
+      const { data: calendarData, error: calendarErr } = await supabase
         .from('calendar_events')
         .select('*')
         .eq('user_id', supabaseUser.id);
+
+      if (calendarErr) throw calendarErr;
 
       if (calendarData) {
         setCalendarEvents(calendarData.map(evt => ({
@@ -230,41 +263,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })));
       }
 
-    } catch (err) {
-      console.error('Error synchronizing database tables', err);
+    } catch (err: any) {
+      console.error('Error synchronizing database tables:', err);
+      showToast(`Database Sync Error: ${err.message || err}`, 'error');
     }
   };
 
   const setApiKey = async (key: string) => {
     setApiKeyState(key);
     if (sessionUser) {
-      await supabase
-        .from('profiles')
-        .update({ api_key: key })
-        .eq('id', sessionUser.id);
+      if (!isSupabaseConfigured) {
+        showToast('Supabase is not configured. Key saved locally only.', 'warning');
+        return;
+      }
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ api_key: key })
+          .eq('id', sessionUser.id);
+        
+        if (error) throw error;
+        showToast('Developer API key saved successfully.', 'success');
+      } catch (err: any) {
+        showToast(`Failed to synchronize API key to database: ${err.message}`, 'error');
+      }
+    } else {
+      showToast('API key saved for local sandbox session.', 'success');
     }
   };
 
   const upgradeToPremium = async () => {
+    const nextCredits = user.credits + 500;
+    setUser(prev => ({
+      ...prev,
+      tier: 'premium',
+      credits: nextCredits,
+      totalCredits: 550
+    }));
+
     if (sessionUser) {
-      const nextCredits = user.credits + 500;
-      setUser(prev => ({
-        ...prev,
-        tier: 'premium',
-        credits: nextCredits,
-        totalCredits: 550
-      }));
-      await supabase
-        .from('profiles')
-        .update({ tier: 'premium', credits: nextCredits })
-        .eq('id', sessionUser.id);
+      if (!isSupabaseConfigured) {
+        showToast('Database is not configured. Upgraded locally.', 'warning');
+        return;
+      }
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ tier: 'premium', credits: nextCredits })
+          .eq('id', sessionUser.id);
+        
+        if (error) throw error;
+        showToast('Account successfully upgraded to Pro Tier!', 'success');
+      } catch (err: any) {
+        showToast(`Payment registered, but failed to update cloud database: ${err.message}`, 'error');
+      }
     } else {
-      setUser(prev => ({
-        ...prev,
-        tier: 'premium',
-        credits: prev.credits + 500,
-        totalCredits: prev.totalCredits + 500
-      }));
+      showToast('Sandbox workspace upgraded to Pro Tier!', 'success');
     }
   };
 
@@ -277,13 +331,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       credits: nextCredits
     }));
 
-    if (sessionUser) {
+    if (sessionUser && isSupabaseConfigured) {
       supabase
         .from('profiles')
         .update({ credits: nextCredits })
         .eq('id', sessionUser.id)
         .then(({ error }) => {
-          if (error) console.error('Error updating credits', error);
+          if (error) {
+            console.error('Error updating credits:', error);
+            showToast(`Credits Sync Warning: ${error.message}`, 'warning');
+          }
         });
     }
 
@@ -304,21 +361,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setWriterHistory(prev => [newItem, ...prev]);
 
-    if (sessionUser) {
-      const { data, error } = await supabase
-        .from('writer_history')
-        .insert({
-          user_id: sessionUser.id,
-          template,
-          prompt,
-          response
-        })
-        .select()
-        .single();
+    if (sessionUser && isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('writer_history')
+          .insert({
+            user_id: sessionUser.id,
+            template,
+            prompt,
+            response
+          })
+          .select()
+          .single();
 
-      if (data && !error) {
-        // Swap temp ID with real DB UUID
-        setWriterHistory(prev => prev.map(item => item.id === tempId ? { ...item, id: data.id } : item));
+        if (error) throw error;
+        if (data) {
+          // Swap temp ID with real DB UUID
+          setWriterHistory(prev => prev.map(item => item.id === tempId ? { ...item, id: data.id } : item));
+        }
+      } catch (err: any) {
+        showToast(`Failed to save marketing copy to history: ${err.message}`, 'error');
       }
     }
   };
@@ -337,20 +399,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setStudioImages(prev => [newImage, ...prev]);
 
-    if (sessionUser) {
-      const { data, error } = await supabase
-        .from('studio_images')
-        .insert({
-          user_id: sessionUser.id,
-          prompt,
-          style,
-          url
-        })
-        .select()
-        .single();
+    if (sessionUser && isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('studio_images')
+          .insert({
+            user_id: sessionUser.id,
+            prompt,
+            style,
+            url
+          })
+          .select()
+          .single();
 
-      if (data && !error) {
-        setStudioImages(prev => prev.map(img => img.id === tempId ? { ...img, id: data.id } : img));
+        if (error) throw error;
+        if (data) {
+          setStudioImages(prev => prev.map(img => img.id === tempId ? { ...img, id: data.id } : img));
+        }
+      } catch (err: any) {
+        showToast(`Failed to save generated image: ${err.message}`, 'error');
       }
     }
   };
@@ -365,35 +432,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setCalendarEvents(prev => [...prev, newEvent]);
 
-    if (sessionUser) {
-      const { data, error } = await supabase
-        .from('calendar_events')
-        .insert({
-          user_id: sessionUser.id,
-          date: event.date,
-          time: event.time,
-          platform: event.platform,
-          content: event.content,
-          status: 'scheduled'
-        })
-        .select()
-        .single();
+    if (sessionUser && isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('calendar_events')
+          .insert({
+            user_id: sessionUser.id,
+            date: event.date,
+            time: event.time,
+            platform: event.platform,
+            content: event.content,
+            status: 'scheduled'
+          })
+          .select()
+          .single();
 
-      if (data && !error) {
-        setCalendarEvents(prev => prev.map(evt => evt.id === tempId ? { ...evt, id: data.id } : evt));
+        if (error) throw error;
+        if (data) {
+          setCalendarEvents(prev => prev.map(evt => evt.id === tempId ? { ...evt, id: data.id } : evt));
+          showToast('Campaign scheduled successfully.', 'success');
+        }
+      } catch (err: any) {
+        showToast(`Failed to sync calendar campaign: ${err.message}`, 'error');
       }
+    } else {
+      showToast('Campaign scheduled locally (Sandbox Mode).', 'success');
     }
   };
 
   const deleteCalendarEvent = async (id: string) => {
     setCalendarEvents(prev => prev.filter(evt => evt.id !== id));
 
-    if (sessionUser && !id.startsWith('mock') && !id.startsWith('evt-')) {
-      await supabase
-        .from('calendar_events')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', sessionUser.id);
+    if (sessionUser && isSupabaseConfigured && !id.startsWith('mock') && !id.startsWith('evt-')) {
+      try {
+        const { error } = await supabase
+          .from('calendar_events')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', sessionUser.id);
+        
+        if (error) throw error;
+        showToast('Campaign deleted successfully.', 'success');
+      } catch (err: any) {
+        showToast(`Failed to delete campaign: ${err.message}`, 'error');
+      }
+    } else if (id.startsWith('mock') || id.startsWith('evt-')) {
+      showToast('Local campaign deleted successfully.', 'success');
     }
   };
 
@@ -411,17 +495,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return evt;
     }));
 
-    if (sessionUser && !id.startsWith('mock') && !id.startsWith('evt-')) {
-      await supabase
-        .from('calendar_events')
-        .update({ status: nextStatus })
-        .eq('id', id)
-        .eq('user_id', sessionUser.id);
+    if (sessionUser && isSupabaseConfigured && !id.startsWith('mock') && !id.startsWith('evt-')) {
+      try {
+        const { error } = await supabase
+          .from('calendar_events')
+          .update({ status: nextStatus })
+          .eq('id', id)
+          .eq('user_id', sessionUser.id);
+        
+        if (error) throw error;
+        showToast(`Campaign marked as ${nextStatus}.`, 'success');
+      } catch (err: any) {
+        showToast(`Failed to update campaign: ${err.message}`, 'error');
+      }
+    } else {
+      showToast(`Campaign status updated locally to ${nextStatus}.`, 'success');
     }
   };
 
   const signOutUser = async () => {
-    await supabase.auth.signOut();
+    if (!isSupabaseConfigured) {
+      setSessionUser(null);
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      showToast('Logged out of cloud workspace.', 'success');
+    } catch (err: any) {
+      showToast(`Sign out warning: ${err.message}`, 'warning');
+    }
   };
 
   return (
@@ -432,6 +535,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       calendarEvents,
       apiKey,
       sessionUser,
+      toast,
+      isSupabaseReady: isSupabaseConfigured,
+      clearToast,
+      showToast,
       setApiKey,
       upgradeToPremium,
       consumeCredits,

@@ -11,7 +11,7 @@ const WRITER_TEMPLATES = [
 ];
 
 export const AIWriter: React.FC = () => {
-  const { writerHistory, consumeCredits, addWriterItem, apiKey } = useApp();
+  const { writerHistory, consumeCredits, addWriterItem, apiKey, user } = useApp();
   const [selectedTemplate, setSelectedTemplate] = useState('Google Ads Search');
   const [prompt, setPrompt] = useState('');
   const [audience, setAudience] = useState('SaaS Founders');
@@ -69,16 +69,16 @@ export const AIWriter: React.FC = () => {
     setIsGenerating(true);
     setOutput('');
 
-    // Consume 5 credits
-    const success = consumeCredits(5);
-    if (!success) {
+    // Pre-check credits balance
+    if (user.credits < 5) {
       setErrorMsg('Insufficient credits! Please upgrade to Pro to receive 500 premium credits.');
       setIsGenerating(false);
       return;
     }
 
-    // If Gemini key is set, try using real API (Optional Developer feature!)
     let generatedResult = '';
+    
+    // If Gemini key is set, try using real API (Optional Developer feature!)
     if (apiKey) {
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
@@ -98,14 +98,30 @@ export const AIWriter: React.FC = () => {
             }]
           })
         });
+        
         const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error?.message || `API returned status ${response.status}`);
+        }
+        
         generatedResult = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      } catch (err) {
-        console.error("Gemini API Error, falling back to simulator", err);
-      }
-    }
+        if (!generatedResult) {
+          throw new Error('Gemini API did not return any candidate copy contents.');
+        }
 
-    if (!generatedResult) {
+        // Consume 5 credits only on successful generation
+        consumeCredits(5);
+
+      } catch (err: any) {
+        console.error("Gemini API Error:", err);
+        setErrorMsg(`Gemini API Error: ${err.message || err}`);
+        setIsGenerating(false);
+        return; // Halt and preserve credits
+      }
+    } else {
+      // Simulate generator - consume credits and use local fallback
+      consumeCredits(5);
       generatedResult = generateMockText(selectedTemplate, prompt);
     }
 

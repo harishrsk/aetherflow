@@ -9,10 +9,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+export const isSupabaseConfigured = 
+  !!supabaseUrl && 
+  !!supabaseAnonKey && 
+  supabaseUrl !== 'https://placeholder.supabase.co' && 
+  !supabaseUrl.includes('placeholder.supabase.co');
+
 // Expose a unified connection client for authentication and database queries.
 // We use placeholder strings if variables are undefined to prevent the app from crashing on start.
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key'
 );
+
 
