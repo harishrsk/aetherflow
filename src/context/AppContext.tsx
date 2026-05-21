@@ -269,14 +269,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     } catch (err: any) {
       console.error('Error synchronizing database tables:', err);
-      const errMsg = err?.message || '';
+      
+      let errMsg = '';
+      if (typeof err === 'string') {
+        errMsg = err;
+      } else if (err && typeof err === 'object') {
+        errMsg = err.message || err.details || err.hint || err.toString() || '';
+      }
+      errMsg = errMsg.toLowerCase();
+
       const errCode = err?.code || '';
       const isMissingTable = 
         errCode === '42P01' || 
         errMsg.includes('relation') || 
         errMsg.includes('does not exist') || 
-        errMsg.includes('Could not find the table') || 
-        errMsg.includes('schema cache');
+        errMsg.includes('could not find') || 
+        errMsg.includes('schema cache') ||
+        errMsg.includes('missing');
 
       if (isMissingTable) {
         setDbTablesMissing(true);
