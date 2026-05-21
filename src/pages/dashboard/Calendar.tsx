@@ -253,6 +253,7 @@ export const Calendar: React.FC = () => {
                   onChange={(e) => setContent(e.target.value)}
                   style={{ resize: 'none', fontSize: '13px' }}
                 />
+                <PreFlightScorer content={content} />
               </div>
 
               <button 
@@ -270,6 +271,138 @@ export const Calendar: React.FC = () => {
     </div>
   );
 };
+
+interface PreFlightScorerProps {
+  content: string;
+}
+
+const PreFlightScorer: React.FC<PreFlightScorerProps> = ({ content }) => {
+  if (!content.trim()) {
+    return (
+      <div style={{ padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px dashed var(--border-color)', borderRadius: '8px', fontSize: '11px', color: 'var(--text-muted)', marginTop: '10px', textAlign: 'center' }}>
+        Start typing to view engagement and CTR predictions.
+      </div>
+    );
+  }
+
+  // Hook Strength Heuristic
+  let hookStrength = 20;
+  if (content.includes('?')) hookStrength += 20;
+  
+  const sentences = content.split(/[.!?]/).filter(Boolean);
+  const firstSentence = sentences[0] || '';
+  if (firstSentence && firstSentence.trim().length <= 55) {
+    hookStrength += 25;
+  }
+  if (/\d+/.test(content)) hookStrength += 15;
+  
+  const emojiRegex = /[\uD800-\uDFFF\u2600-\u27BF]/g;
+  if (emojiRegex.test(content)) hookStrength += 20;
+  if (content.length >= 100 && content.length <= 220) hookStrength += 10;
+  hookStrength = Math.min(100, hookStrength);
+
+  // Redirection Risk Heuristic
+  let redirectionRisk = 10;
+  const linkRegex = /(https?:\/\/[^\s]+)|([a-zA-Z0-9-]+\.[a-zA-Z]{2,}\b)/g;
+  const hasLink = linkRegex.test(content);
+  if (hasLink) {
+    redirectionRisk += 40;
+    const linkIndex = content.search(linkRegex);
+    if (linkIndex !== -1 && linkIndex < content.length / 2) {
+      redirectionRisk += 30;
+    }
+  }
+  const hashtagCount = (content.match(/#/g) || []).length;
+  if (hashtagCount > 3) redirectionRisk += 20;
+  redirectionRisk = Math.min(100, redirectionRisk);
+
+  // CTR Potential Heuristic
+  const ctaWords = ['click', 'visit', 'try', '👇', 'link', 'here', 'get', 'join', 'shop'];
+  const hasCta = ctaWords.some(w => content.toLowerCase().includes(w));
+  let ctrPotential = Math.round(hookStrength * 0.5 + (100 - redirectionRisk) * 0.3);
+  if (hasCta) ctrPotential += 20;
+  ctrPotential = Math.min(100, Math.max(0, ctrPotential));
+
+  // Recommendations
+  const recommendations: string[] = [];
+  if (!hasCta) {
+    recommendations.push("Add a clear Call-To-Action (e.g., 'try', 'visit', '👇')");
+  }
+  if (firstSentence.trim().length > 55) {
+    recommendations.push("Shorten the first sentence to improve readability");
+  }
+  if (!emojiRegex.test(content)) {
+    recommendations.push("Incorporate an emoji to boost visual engagement");
+  }
+  if (hashtagCount === 0) {
+    recommendations.push("Add hashtags to improve discovery");
+  }
+  if (hasLink) {
+    const firstHalfLink = content.search(linkRegex) < content.length / 2;
+    if (firstHalfLink) {
+      recommendations.push("Place the link at the end to lower redirection risk");
+    }
+  }
+
+  const primaryGradient = 'linear-gradient(90deg, var(--color-pink), var(--color-primary))';
+  const secondaryGradient = 'linear-gradient(90deg, var(--color-secondary), var(--color-indigo))';
+
+  const hookGradient = hookStrength >= 60 ? secondaryGradient : primaryGradient;
+  const ctrGradient = ctrPotential >= 60 ? secondaryGradient : primaryGradient;
+  const riskGradient = redirectionRisk <= 40 ? secondaryGradient : primaryGradient;
+
+  return (
+    <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Pre-Flight Engagement Scorer
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
+            <span>Hook Strength</span>
+            <span style={{ fontWeight: 600, color: hookStrength >= 60 ? 'var(--color-secondary)' : 'var(--color-pink)' }}>{hookStrength}%</span>
+          </div>
+          <div style={{ height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{ width: `${hookStrength}%`, height: '100%', background: hookGradient, transition: 'width 0.3s ease' }}></div>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
+            <span>Redirection Risk</span>
+            <span style={{ fontWeight: 600, color: redirectionRisk <= 40 ? 'var(--color-secondary)' : 'var(--color-pink)' }}>{redirectionRisk}%</span>
+          </div>
+          <div style={{ height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{ width: `${redirectionRisk}%`, height: '100%', background: riskGradient, transition: 'width 0.3s ease' }}></div>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
+            <span>Estimated CTR Potential</span>
+            <span style={{ fontWeight: 600, color: ctrPotential >= 60 ? 'var(--color-secondary)' : 'var(--color-pink)' }}>{ctrPotential}%</span>
+          </div>
+          <div style={{ height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{ width: `${ctrPotential}%`, height: '100%', background: ctrGradient, transition: 'width 0.3s ease' }}></div>
+          </div>
+        </div>
+      </div>
+
+      {recommendations.length > 0 && (
+        <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '8px' }}>
+          <div style={{ fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>Actionable Improvements:</div>
+          <ul style={{ paddingLeft: '12px', margin: 0, fontSize: '9px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px', listStyleType: 'disc' }}>
+            {recommendations.map((rec, i) => (
+              <li key={i}>{rec}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 // Styles
 const containerStyle: React.CSSProperties = {

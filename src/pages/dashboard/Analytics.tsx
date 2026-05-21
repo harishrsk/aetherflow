@@ -6,26 +6,77 @@ export const Analytics: React.FC = () => {
   const { user, writerHistory, studioImages } = useApp();
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
 
-  // SVG Chart Data - Traffic (clicks) over 6 weeks
-  const trafficData = [240, 480, 390, 680, 890, 1240];
+  // Base traffic clicks over 6 weeks
+  const baseTraffic = [240, 480, 390, 680, 890, 1240];
+  
+  // Aggregate user logs (writerHistory, studioImages) into 6 weekly buckets
+  const trafficData = [...baseTraffic];
+  const now = Date.now();
+  const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+  
+  const getWeekIndex = (timestampStr: string): number => {
+    const itemTime = new Date(timestampStr).getTime();
+    const diff = now - itemTime;
+    if (diff < 0) return 5; // Current week
+    const weeksAgo = Math.floor(diff / oneWeekMs);
+    const idx = 5 - weeksAgo;
+    return idx >= 0 && idx <= 5 ? idx : -1;
+  };
+
+  writerHistory.forEach(item => {
+    const idx = getWeekIndex(item.timestamp);
+    if (idx !== -1) {
+      trafficData[idx] += 100; // Weight of +100 clicks per text item
+    }
+  });
+
+  studioImages.forEach(item => {
+    const idx = getWeekIndex(item.timestamp);
+    if (idx !== -1) {
+      trafficData[idx] += 150; // Weight of +150 clicks per image item
+    }
+  });
+
+  // Calculate 3-week rolling average for Weeks 7, 8, 9
+  const fullTraffic = [...trafficData];
+  for (let i = 6; i <= 8; i++) {
+    const prev3 = fullTraffic.slice(i - 3, i);
+    const avg = prev3.reduce((sum, v) => sum + v, 0) / 3;
+    // Apply positive trend factor and deterministic volatility based on index
+    const trend = 60 * (i - 5);
+    const volatility = Math.sin(i) * 30;
+    const projectedVal = Math.round(avg + trend + volatility);
+    fullTraffic.push(projectedVal);
+  }
+
   const chartWidth = 500;
   const chartHeight = 150;
   const padding = 20;
 
-  // Compute SVG line path points
-  const points = trafficData.map((val, idx) => {
-    const x = padding + (idx * (chartWidth - padding * 2)) / (trafficData.length - 1);
-    const maxVal = Math.max(...trafficData);
+  // Compute SVG line path points for all 9 data points
+  const points = fullTraffic.map((val, idx) => {
+    const x = padding + (idx * (chartWidth - padding * 2)) / (fullTraffic.length - 1);
+    const maxVal = Math.max(...fullTraffic);
     const y = chartHeight - padding - (val * (chartHeight - padding * 2)) / maxVal;
     return { x, y, val };
   });
 
-  const pathD = points.reduce((acc, p, idx) => {
+  // Split points into solid (0 to 5) and dashed (5 to 8) sections
+  const solidPoints = points.slice(0, 6);
+  const dashedPoints = points.slice(5, 9);
+
+  const solidPathD = solidPoints.reduce((acc, p, idx) => {
     return idx === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`;
   }, '');
 
-  // Fill path under the line
-  const fillD = `${pathD} L ${points[points.length - 1].x} ${chartHeight - padding} L ${points[0].x} ${chartHeight - padding} Z`;
+  const dashedPathD = dashedPoints.reduce((acc, p, idx) => {
+    return idx === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`;
+  }, '');
+
+  // Fill path under the entire line (including the projected weeks)
+  const fillD = `${points.reduce((acc, p, idx) => {
+    return idx === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`;
+  }, '')} L ${points[points.length - 1].x} ${chartHeight - padding} L ${points[0].x} ${chartHeight - padding} Z`;
 
   // Bar chart data - conversions by channel
   const barData = [
@@ -101,6 +152,17 @@ export const Analytics: React.FC = () => {
                 </linearGradient>
               </defs>
               
+              <style>{`
+                @keyframes forecastingPulse {
+                  0% { stroke-dashoffset: 24; opacity: 0.85; filter: drop-shadow(0 0 2px var(--color-secondary)); }
+                  50% { opacity: 1; filter: drop-shadow(0 0 8px var(--color-secondary)); }
+                  100% { stroke-dashoffset: 0; opacity: 0.85; filter: drop-shadow(0 0 2px var(--color-secondary)); }
+                }
+                .forecasting-line {
+                  animation: forecastingPulse 8s linear infinite;
+                }
+              `}</style>
+              
               {/* Grid Lines */}
               <line x1={padding} y1={chartHeight - padding} x2={chartWidth - padding} y2={chartHeight - padding} stroke="rgba(255,255,255,0.05)" />
               <line x1={padding} y1={padding} x2={chartWidth - padding} y2={padding} stroke="rgba(255,255,255,0.02)" />
@@ -108,8 +170,18 @@ export const Analytics: React.FC = () => {
               {/* Gradient Area Fill */}
               <path d={fillD} fill="url(#chartGradient)" />
 
-              {/* Smooth Path Line */}
-              <path d={pathD} fill="none" stroke="var(--color-primary)" strokeWidth="2.5" />
+              {/* Solid Path Line for Weeks 1 to 6 */}
+              <path d={solidPathD} fill="none" stroke="var(--color-primary)" strokeWidth="2.5" />
+
+              {/* Dashed Neon Forecasting Line for Weeks 6 to 9 */}
+              <path 
+                d={dashedPathD} 
+                fill="none" 
+                stroke="var(--color-secondary)" 
+                strokeWidth="2.5" 
+                strokeDasharray="4 4"
+                className="forecasting-line"
+              />
 
               {/* Data Interactive Circles */}
               {points.map((p, idx) => (
@@ -119,32 +191,43 @@ export const Analytics: React.FC = () => {
                     cy={p.y} 
                     r={hoveredPoint === idx ? 6 : 4} 
                     fill="var(--bg-dark)" 
-                    stroke="var(--color-secondary)" 
+                    stroke={idx >= 5 ? "var(--color-secondary)" : "var(--color-primary)"} 
                     strokeWidth="2.5"
                     style={{ cursor: 'pointer', transition: 'r 0.15s ease' }}
                     onMouseEnter={() => setHoveredPoint(idx)}
                     onMouseLeave={() => setHoveredPoint(null)}
                   />
                   {hoveredPoint === idx && (
-                    <g>
+                    <g style={{ pointerEvents: 'none' }}>
                       <rect 
-                        x={p.x - 30} 
-                        y={p.y - 30} 
-                        width="60" 
-                        height="20" 
-                        rx="4" 
+                        x={p.x - 65} 
+                        y={p.y - 45} 
+                        width="130" 
+                        height="36" 
+                        rx="6" 
                         fill="var(--bg-darker)" 
-                        stroke="var(--border-color)"
+                        stroke={idx >= 5 ? "var(--color-secondary)" : "var(--color-primary)"}
+                        strokeWidth="1.5"
                       />
                       <text 
                         x={p.x} 
-                        y={p.y - 17} 
+                        y={p.y - 32} 
+                        fill="var(--text-secondary)" 
+                        fontSize="8" 
+                        fontWeight="600"
+                        textAnchor="middle"
+                      >
+                        {idx >= 5 ? "Projected Traffic Volume" : "Traffic clicks"}
+                      </text>
+                      <text 
+                        x={p.x} 
+                        y={p.y - 18} 
                         fill="var(--text-primary)" 
-                        fontSize="9" 
+                        fontSize="10" 
                         fontWeight="700"
                         textAnchor="middle"
                       >
-                        {p.val} cls
+                        {p.val} clicks
                       </text>
                     </g>
                   )}
@@ -153,8 +236,17 @@ export const Analytics: React.FC = () => {
             </svg>
           </div>
           <div style={chartLegendStyle}>
-            {['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4', 'Wk 5', 'Wk 6'].map((label, idx) => (
-              <span key={idx} style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{label}</span>
+            {['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4', 'Wk 5', 'Wk 6', 'Wk 7', 'Wk 8', 'Wk 9'].map((label, idx) => (
+              <span 
+                key={idx} 
+                style={{ 
+                  fontSize: '9px', 
+                  color: idx >= 5 ? 'var(--color-secondary)' : 'var(--text-muted)',
+                  fontWeight: idx >= 5 ? '600' : '400'
+                }}
+              >
+                {label}
+              </span>
             ))}
           </div>
         </div>

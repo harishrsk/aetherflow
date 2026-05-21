@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ImageIcon, Sparkles, Download, Zap } from 'lucide-react';
+import { ImageIcon, Sparkles, Download, Zap, X } from 'lucide-react';
 
 const STYLE_PRESETS = [
   { name: 'Photorealistic', chip: '📸' },
@@ -18,7 +18,7 @@ const PRESETS = [
 ];
 
 export const AIImageStudio: React.FC = () => {
-  const { studioImages, consumeCredits, addStudioImage } = useApp();
+  const { studioImages, consumeCredits, addStudioImage, user, showToast } = useApp();
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('3D Render');
   const [aspectRatio, setAspectRatio] = useState('1:1');
@@ -27,6 +27,105 @@ export const AIImageStudio: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState('');
   const [activePreviewImage, setActivePreviewImage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Image Variant Matrix states
+  const [variantTargetImage, setVariantTargetImage] = useState<any | null>(null);
+  const [styleTweak, setStyleTweak] = useState('');
+  const [generatingVariantParentId, setGeneratingVariantParentId] = useState<string | null>(null);
+  const [variantStatusMessage, setVariantStatusMessage] = useState('');
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+
+  // Listen to custom tab pre-fill events
+  useEffect(() => {
+    const handlePrefill = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.tab === 'studio' && customEvent.detail?.prompt) {
+        setPrompt(customEvent.detail.prompt);
+      }
+    };
+    window.addEventListener('switch-dashboard-tab', handlePrefill);
+    return () => window.removeEventListener('switch-dashboard-tab', handlePrefill);
+  }, []);
+
+  const getParentId = (promptStr: string): string | null => {
+    const match = promptStr.match(/^\[Parent:\s*([^\]]+)\]/);
+    return match ? match[1].trim() : null;
+  };
+
+  const cleanPrompt = (promptStr: string): string => {
+    return promptStr.replace(/^\[Parent:\s*[^\]]+\]\s*/, '');
+  };
+
+  const getSimulatedVariantImage = (parentPrompt: string, _tweak: string): string => {
+    const key = parentPrompt.toLowerCase();
+    
+    if (key.includes('office') || key.includes('workspace') || key.includes('desk') || key.includes('computer')) {
+      return 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80';
+    }
+    if (key.includes('aurora') || key.includes('mountain') || key.includes('landscape') || key.includes('sky')) {
+      return 'https://images.unsplash.com/photo-1475274047050-1d0c0975c63e?auto=format&fit=crop&w=800&q=80';
+    }
+    if (key.includes('brain') || key.includes('cyber') || key.includes('tech') || key.includes('ai')) {
+      return 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80';
+    }
+    if (key.includes('skincare') || key.includes('cosmetics') || key.includes('product') || key.includes('minimal')) {
+      return 'https://images.unsplash.com/photo-1608248597481-496100c8c836?auto=format&fit=crop&w=800&q=80';
+    }
+    
+    const variantsPool = [
+      'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1604871000636-074fa5117945?auto=format&fit=crop&w=800&q=80'
+    ];
+    return variantsPool[Math.floor(Math.random() * variantsPool.length)];
+  };
+
+  const handleGenerateVariant = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!variantTargetImage || !styleTweak.trim() || generatingVariantParentId) return;
+
+    const parentId = variantTargetImage.id;
+    const parentPrompt = cleanPrompt(variantTargetImage.prompt);
+    const parentStyle = variantTargetImage.style;
+
+    if (user.credits < 5) {
+      showToast('Insufficient credits! Image Variant requires 5 credits.', 'error');
+      return;
+    }
+
+    consumeCredits(5);
+    setGeneratingVariantParentId(parentId);
+    setVariantTargetImage(null);
+
+    const steps = [
+      'Regenerating style tokens...',
+      'Locking random seed values...',
+      'Diffusing variants with latent weights...',
+      'Normalizing pixels & color spectrums...',
+      'Polishing variant details...'
+    ];
+
+    let stepIndex = 0;
+    setVariantStatusMessage(steps[0]);
+
+    const interval = setInterval(() => {
+      stepIndex++;
+      if (stepIndex < steps.length) {
+        setVariantStatusMessage(steps[stepIndex]);
+      } else {
+        clearInterval(interval);
+        
+        const variantUrl = getSimulatedVariantImage(parentPrompt, styleTweak);
+        const encodedPrompt = `[Parent: ${parentId}] ${parentPrompt} (Tweak: ${styleTweak})`;
+        
+        addStudioImage(encodedPrompt, parentStyle, variantUrl);
+        setGeneratingVariantParentId(null);
+        showToast('Image variant generated successfully.', 'success');
+      }
+    }, 1000);
+  };
+
 
   // Unsplash images mapped to prompt keywords to simulate a real image generator!
   const getSimulatedImage = (promptText: string): string => {
@@ -105,6 +204,29 @@ export const AIImageStudio: React.FC = () => {
     }
   };
 
+  // Group images such that variants immediately follow their parent image
+  const parents = studioImages.filter(img => !getParentId(img.prompt));
+  const variants = studioImages.filter(img => !!getParentId(img.prompt));
+
+  const groupedImages: Array<any> = [];
+  parents.forEach(parent => {
+    groupedImages.push({ ...parent, isVariant: false });
+    const parentVariants = variants
+      .filter(v => getParentId(v.prompt) === parent.id)
+      .map(v => ({ ...v, isVariant: true }));
+    groupedImages.push(...parentVariants);
+  });
+
+  // Also include any orphan variants
+  variants.forEach(variant => {
+    const pId = getParentId(variant.prompt);
+    if (pId && !parents.some(p => p.id === pId)) {
+      if (!groupedImages.some(r => r.id === variant.id)) {
+        groupedImages.push({ ...variant, isVariant: true });
+      }
+    }
+  });
+
   return (
     <div style={studioContainerStyle}>
       <div style={mainPanelStyle}>
@@ -177,25 +299,114 @@ export const AIImageStudio: React.FC = () => {
             <div style={emptyGalleryStyle}>No images generated yet.</div>
           ) : (
             <div style={galleryGridStyle}>
-              {studioImages.map((img) => (
-                <div 
-                  key={img.id}
-                  className="glass-interactive" 
-                  style={galleryCardStyle}
-                  onClick={() => setActivePreviewImage(img.url)}
-                >
-                  <img src={img.url} alt={img.prompt} style={galleryImgStyle} />
-                  <div style={galleryCardInfoStyle}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 600 }}>
-                      {img.prompt}
+              {groupedImages.flatMap((img: any) => {
+                const isHovered = hoveredCardId === img.id;
+                const displayPrompt = cleanPrompt(img.prompt);
+
+                const cardElements = [
+                  <div 
+                    key={img.id}
+                    className="glass-interactive" 
+                    style={{
+                      ...galleryCardStyle,
+                      ...(img.isVariant ? {
+                        borderLeft: '2px solid var(--color-secondary)',
+                        marginLeft: '12px',
+                        background: 'rgba(6, 182, 212, 0.02)',
+                        boxShadow: '0 4px 15px -5px var(--glow-secondary)'
+                      } : {})
+                    }}
+                    onMouseEnter={() => setHoveredCardId(img.id)}
+                    onMouseLeave={() => setHoveredCardId(null)}
+                    onClick={() => setActivePreviewImage(img.url)}
+                  >
+                    <div style={{ position: 'relative', overflow: 'hidden', height: '90px' }}>
+                      <img src={img.url} alt={displayPrompt} style={galleryImgStyle} />
+                      
+                      {/* Hover action overlay to generate variants, but only for parent images */}
+                      {!img.isVariant && (
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: 'rgba(0, 0, 0, 0.5)',
+                          backdropFilter: 'blur(2px)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: isHovered ? 1 : 0,
+                          transition: 'opacity 0.2s ease',
+                          pointerEvents: isHovered ? 'auto' : 'none'
+                        }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setVariantTargetImage(img);
+                              setStyleTweak('');
+                            }}
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: '10px',
+                              borderColor: 'var(--color-secondary)',
+                              color: 'var(--color-secondary)',
+                              background: 'rgba(6, 182, 212, 0.1)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <Sparkles size={10} /> Variants
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '9px', color: 'var(--text-muted)' }}>
-                      <span>{img.style}</span>
-                      <span>{new Date(img.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    
+                    <div style={galleryCardInfoStyle}>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 600 }} title={displayPrompt}>
+                        {img.isVariant && <span style={{ color: 'var(--color-secondary)', marginRight: '4px' }}>[Variant]</span>}
+                        {displayPrompt}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '9px', color: 'var(--text-muted)' }}>
+                        <span>{img.style}</span>
+                        <span>{new Date(img.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ];
+
+                // If this parent is currently generating a variant, render the localized typing loader immediately next to it
+                if (generatingVariantParentId === img.id) {
+                  cardElements.push(
+                    <div 
+                      key={`loading-variant-${img.id}`}
+                      className="glass animate-pulse" 
+                      style={{
+                        ...galleryCardStyle,
+                        border: '1px dashed var(--color-secondary)',
+                        marginLeft: '12px',
+                        background: 'rgba(6, 182, 212, 0.04)',
+                        padding: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        minHeight: '125px'
+                      }}
+                    >
+                      <div className="loader" style={{ width: '16px', height: '16px', borderWidth: '2px', marginBottom: '8px', borderColor: 'var(--color-secondary) transparent transparent transparent' }}></div>
+                      <div style={{ fontSize: '9px', color: 'var(--color-secondary)', textAlign: 'center', fontFamily: 'monospace', letterSpacing: '0.02em' }}>
+                        {variantStatusMessage}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return cardElements;
+              })}
             </div>
           )}
         </div>
@@ -280,6 +491,101 @@ export const AIImageStudio: React.FC = () => {
           <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-secondary)' }}>10 <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)' }}>credits</span></div>
         </div>
       </div>
+
+      {/* Variant Tweaker Modal */}
+      {variantTargetImage && (
+        <div style={modalOverlayStyle}>
+          <div className="glass" style={modalContentStyle}>
+            <div style={modalHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600 }}>
+                <Sparkles size={16} color="var(--color-secondary)" />
+                <span>Generate Stylistic Image Variant</span>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setVariantTargetImage(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', outline: 'none' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleGenerateVariant} style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '10px' }}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <img src={variantTargetImage.url} alt="parent" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Locked Parent Prompt</div>
+                  <div style={{ fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
+                    {cleanPrompt(variantTargetImage.prompt)}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '15px' }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Style Preset</span>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-secondary)' }}>{variantTargetImage.style} 🔒</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Random Seed</span>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-primary)' }}>Locked (5839210) 🔒</div>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Stylistic Focus Tweak</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  placeholder="e.g. vaporwave style, glassmorphism, cinematic lighting"
+                  value={styleTweak}
+                  onChange={(e) => setStyleTweak(e.target.value)}
+                  required
+                />
+              </div>
+
+              {/* Tweak Chips */}
+              <div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px' }}>Suggestions:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {['vaporwave style', 'synthwave neon', 'cyberpunk glow', 'cinematic lighting', 'vintage film look', 'glassmorphic shine'].map(chip => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setStyleTweak(chip)}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid var(--border-color)',
+                        background: 'rgba(255,255,255,0.02)',
+                        color: 'var(--text-secondary)',
+                        fontSize: '10px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ ...costIndicatorStyle, marginTop: '10px', background: 'rgba(6, 182, 212, 0.03)', borderColor: 'rgba(6, 182, 212, 0.1)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Credits Cost</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-secondary)' }}>5 <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)' }}>credits</span></div>
+              </div>
+
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                style={{ width: '100%', padding: '10px', gap: '6px', background: 'linear-gradient(135deg, var(--color-secondary), var(--color-indigo))', borderColor: 'var(--color-secondary)' }}
+                disabled={!styleTweak.trim()}
+              >
+                Generate Variant <Sparkles size={12} />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -512,3 +818,36 @@ const costIndicatorStyle: React.CSSProperties = {
   borderRadius: '8px',
   marginTop: '20px'
 };
+
+const modalOverlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  background: 'rgba(0, 0, 0, 0.6)',
+  backdropFilter: 'blur(6px)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 1000
+};
+
+const modalContentStyle: React.CSSProperties = {
+  width: '380px',
+  padding: '24px',
+  background: 'rgba(10, 10, 16, 0.95)',
+  border: '1px solid var(--border-color)',
+  borderRadius: '16px',
+  boxShadow: '0 20px 40px -15px rgba(0,0,0,0.8)'
+};
+
+const modalHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+  paddingBottom: '10px',
+  marginBottom: '15px'
+};
+

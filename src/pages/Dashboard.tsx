@@ -33,6 +33,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
   const { user, apiKey, setApiKey, sessionUser, toast, clearToast } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('writer');
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
+
+  React.useEffect(() => {
+    const handleSwitchTab = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.tab) {
+        setActiveTab(customEvent.detail.tab as TabType);
+      }
+    };
+    window.addEventListener('switch-dashboard-tab', handleSwitchTab);
+    return () => window.removeEventListener('switch-dashboard-tab', handleSwitchTab);
+  }, []);
   const [selectedWorkspace, setSelectedWorkspace] = useState('My Hub');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [showApiSettings, setShowApiSettings] = useState(false);
