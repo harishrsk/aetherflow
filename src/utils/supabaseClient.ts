@@ -1,7 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Expose a unified connection client for authentication and database queries
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn(
+    '⚠️ Supabase configuration is missing. Make sure to define VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file or hosting provider.'
+  );
+}
+
+// Expose a unified connection client for authentication and database queries.
+// We use placeholder strings if variables are undefined to prevent the app from crashing on start.
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key'
+);
+
