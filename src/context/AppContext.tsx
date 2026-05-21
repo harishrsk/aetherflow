@@ -75,6 +75,9 @@ export const useApp = () => {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sessionUser, setSessionUser] = useState<SupabaseUser | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [dbTablesMissing, setDbTablesMissing] = useState<boolean>(false);
+
+  const isSyncActive = isSupabaseConfigured && !dbTablesMissing;
 
   const showToast = (message: string, type: 'error' | 'success' | 'warning') => {
     setToast({ message, type });
@@ -151,6 +154,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loadUserData(session.user);
       } else {
         setSessionUser(null);
+        setDbTablesMissing(false);
         // Reset to default demo data on sign out
         setUser({
           name: 'Demo Founder',
@@ -265,15 +269,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     } catch (err: any) {
       console.error('Error synchronizing database tables:', err);
-      showToast(`Database Sync Error: ${err.message || err}`, 'error');
+      const errMsg = err?.message || '';
+      const errCode = err?.code || '';
+      const isMissingTable = 
+        errCode === '42P01' || 
+        errMsg.includes('relation') || 
+        errMsg.includes('does not exist') || 
+        errMsg.includes('Could not find the table') || 
+        errMsg.includes('schema cache');
+
+      if (isMissingTable) {
+        setDbTablesMissing(true);
+        // Set user profile using session user email/name so the sidebar profile reflects the active user session!
+        const emailVal = supabaseUser.email || '';
+        const nameVal = emailVal.split('@')[0];
+        setUser({
+          name: nameVal.charAt(0).toUpperCase() + nameVal.slice(1),
+          email: emailVal,
+          tier: 'free',
+          credits: 50,
+          totalCredits: 50
+        });
+        showToast('Database Schema Missing: Please run the SQL migration script (supabase_schema.sql) in your Supabase dashboard to enable database syncing.', 'warning');
+      } else {
+        showToast(`Database Sync Error: ${err.message || err}`, 'error');
+      }
     }
   };
 
   const setApiKey = async (key: string) => {
     setApiKeyState(key);
     if (sessionUser) {
-      if (!isSupabaseConfigured) {
-        showToast('Supabase is not configured. Key saved locally only.', 'warning');
+      if (!isSyncActive) {
+        showToast('Supabase is not configured or schema is missing. Key saved locally only.', 'warning');
         return;
       }
       try {
@@ -302,8 +330,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     if (sessionUser) {
-      if (!isSupabaseConfigured) {
-        showToast('Database is not configured. Upgraded locally.', 'warning');
+      if (!isSyncActive) {
+        showToast('Database is not configured or schema is missing. Upgraded locally.', 'warning');
         return;
       }
       try {
@@ -331,7 +359,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       credits: nextCredits
     }));
 
-    if (sessionUser && isSupabaseConfigured) {
+    if (sessionUser && isSyncActive) {
       supabase
         .from('profiles')
         .update({ credits: nextCredits })
@@ -361,7 +389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setWriterHistory(prev => [newItem, ...prev]);
 
-    if (sessionUser && isSupabaseConfigured) {
+    if (sessionUser && isSyncActive) {
       try {
         const { data, error } = await supabase
           .from('writer_history')
@@ -399,7 +427,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setStudioImages(prev => [newImage, ...prev]);
 
-    if (sessionUser && isSupabaseConfigured) {
+    if (sessionUser && isSyncActive) {
       try {
         const { data, error } = await supabase
           .from('studio_images')
@@ -432,7 +460,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setCalendarEvents(prev => [...prev, newEvent]);
 
-    if (sessionUser && isSupabaseConfigured) {
+    if (sessionUser && isSyncActive) {
       try {
         const { data, error } = await supabase
           .from('calendar_events')
@@ -463,7 +491,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteCalendarEvent = async (id: string) => {
     setCalendarEvents(prev => prev.filter(evt => evt.id !== id));
 
-    if (sessionUser && isSupabaseConfigured && !id.startsWith('mock') && !id.startsWith('evt-')) {
+    if (sessionUser && isSyncActive && !id.startsWith('mock') && !id.startsWith('evt-')) {
       try {
         const { error } = await supabase
           .from('calendar_events')
@@ -495,7 +523,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return evt;
     }));
 
-    if (sessionUser && isSupabaseConfigured && !id.startsWith('mock') && !id.startsWith('evt-')) {
+    if (sessionUser && isSyncActive && !id.startsWith('mock') && !id.startsWith('evt-')) {
       try {
         const { error } = await supabase
           .from('calendar_events')
@@ -521,6 +549,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      setDbTablesMissing(false);
       showToast('Logged out of cloud workspace.', 'success');
     } catch (err: any) {
       showToast(`Sign out warning: ${err.message}`, 'warning');
@@ -536,7 +565,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       apiKey,
       sessionUser,
       toast,
-      isSupabaseReady: isSupabaseConfigured,
+      isSupabaseReady: isSyncActive,
       clearToast,
       showToast,
       setApiKey,
