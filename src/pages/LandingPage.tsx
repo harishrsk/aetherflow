@@ -27,6 +27,69 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp, onOpenAuth
   const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
 
+  const generateDemoMock = (prompt: string): string => {
+    const p = prompt.toLowerCase().trim();
+    
+    // 1. Water Bottle / Hydration
+    if (p.includes('water') || p.includes('bottle') || p.includes('flask') || p.includes('hydration') || p.includes('drink')) {
+      const brand = p.includes('eco-friendly') || p.includes('sustainable') ? 'EcoShield' : 'AeroFlow';
+      return `Headline: Hydration Redefined | Meet the ${brand} Flask\nDescription: Keep your drinks crisp and at the perfect temperature for hours. Designed for active lifestyles with sustainable, high-durability materials. Shop the launch collection today.`;
+    }
+    
+    // 2. SEO / Marketing / Traffic
+    if (p.includes('seo') || p.includes('traffic') || p.includes('google') || p.includes('search') || p.includes('ranking') || p.includes('marketing')) {
+      return `Headline: Explode Your Organic Traffic in 30 Days 📈\nDescription: Stop burning cash on ads. Our intelligent SEO optimizer identifies high-intent search terms and auto-generates content that ranks page one. Try it free today.`;
+    }
+    
+    // 3. AI / GPT / Copilot / Automation / LLM
+    if (p.includes('ai') || p.includes('artificial') || p.includes('gpt') || p.includes('bot') || p.includes('chat') || p.includes('automation') || p.includes('llm')) {
+      return `Headline: Put Your Business on Autopilot with Advanced AI\nDescription: Automate copywriting, customer support, and content scheduling with one unified system. Save up to 20 hours a week and boost conversion rates by 40%.`;
+    }
+    
+    // 4. Fitness / Gym / Workout / Health / Diet
+    if (p.includes('fitness') || p.includes('gym') || p.includes('workout') || p.includes('health') || p.includes('protein') || p.includes('run') || p.includes('diet')) {
+      return `Headline: Unlock Your Peak Performance\nDescription: Engineered for athletes who demand the best. Fuel your workouts, track progress seamlessly, and achieve your health milestones with science-backed formulas.`;
+    }
+    
+    // 5. SaaS / Software / App / Platform / Tech
+    if (p.includes('saas') || p.includes('software') || p.includes('app') || p.includes('platform') || p.includes('tool') || p.includes('code') || p.includes('tech')) {
+      return `Headline: The Next-Gen Workspace for High-Growth Teams\nDescription: Streamline your workflows, integrate your favorite tools, and collaborate in real-time. Built by developers, for creators. Start your free trial today.`;
+    }
+    
+    // 6. Food / Restaurant / Meal / Delivery / Cooking
+    if (p.includes('food') || p.includes('restaurant') || p.includes('recipe') || p.includes('delivery') || p.includes('meal') || p.includes('cooking')) {
+      return `Headline: Chef-Curated Meals Delivered Fresh to Your Door 🍽️\nDescription: Say goodbye to grocery shopping. Healthy, delicious recipes prepared by local chefs and ready in under 10 minutes. Order now and get 30% off your first week.`;
+    }
+    
+    // 7. Clothing / Fashion / Apparel / Shoes / Shirt / Brand / Jewelry
+    if (p.includes('clothing') || p.includes('fashion') || p.includes('apparel') || p.includes('shoes') || p.includes('shirt') || p.includes('brand') || p.includes('jewelry')) {
+      return `Headline: Style Meets Comfort | The All-Season Wear\nDescription: Crafted from ultra-soft, premium organic materials. Designed to keep you looking sharp and feeling comfortable, wherever the day takes you. Shop the drop.`;
+    }
+    
+    // 8. Book / Learn / Course / Education / Study
+    if (p.includes('book') || p.includes('learn') || p.includes('course') || p.includes('education') || p.includes('read') || p.includes('study')) {
+      return `Headline: Master Any Skill in Weeks, Not Years 🎓\nDescription: Learn directly from world-class industry experts. Interactive courses, real-world projects, and a global community to support your growth. Enroll today.`;
+    }
+
+    // 9. Real-estate / House / Home / Living / Apartment
+    if (p.includes('house') || p.includes('home') || p.includes('real estate') || p.includes('apartment') || p.includes('property') || p.includes('living')) {
+      return `Headline: Find Your Dream Space | Modern Living Reimagined\nDescription: Discover premium properties in high-demand neighborhoods. Sleek architectures, state-of-the-art amenities, and flexible payment plans. Book a private tour.`;
+    }
+
+    // 10. Finance / Crypto / Money / Investing / Stock / Wealth
+    if (p.includes('finance') || p.includes('crypto') || p.includes('money') || p.includes('investing') || p.includes('stock') || p.includes('wealth')) {
+      return `Headline: Grow Your Wealth Safely and Smarter 💰\nDescription: Access professional-grade investment insights, automatic portfolio balancing, and zero-fee trading. Take control of your financial future now.`;
+    }
+
+    // 11. Fallback: Parse the user's prompt to inject their keywords dynamically
+    const cleanPrompt = prompt.replace(/[^\w\s]/g, '').trim();
+    const words = cleanPrompt.split(/\s+/).filter(w => w.length > 2);
+    const keywords = words.slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const subject = keywords || 'Your Brand';
+    
+    return `Headline: Elevate ${subject} | Engineered For High Performance\nDescription: Transform how you present "${cleanPrompt.length > 50 ? cleanPrompt.substring(0, 50) + '...' : cleanPrompt}" to the world. Maximize impact, drive conversions, and reach your target audience today.`;
+  };
+
   const handleDemoGenerate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!demoPrompt.trim() || isGeneratingDemo) return;
@@ -34,13 +97,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp, onOpenAuth
     setIsGeneratingDemo(true);
     setDemoResult('');
     
-    const responses = [
-      "Headline: Hydration Redefined | The 48-Hour Cold Bottle\nDescription: Keep your drinks ice-cold for 2 full days. Double-walled premium insulation meets sustainable, eco-friendly design. Shop the vault now.",
-      "Headline: Earth First. Ice Cold Always. 🌍\nDescription: Stop wasting plastic. Upgrade to our lifetime-guaranteed stainless steel water bottle. Double vacuum seal keeps beverages freezing cold for 48 hours.",
-      "Headline: The Last Water Bottle You'll Buy\nDescription: Engineered with double-walled surgical grade steel. Keeps water crisp and cold through hiking, gym, or workspace. Tap to claim your 20% launch discount."
-    ];
-
-    const chosenResponse = responses[Math.floor(Math.random() * responses.length)];
+    const chosenResponse = generateDemoMock(demoPrompt);
     let currentText = '';
     let i = 0;
 
