@@ -9,6 +9,11 @@ create table if not exists public.profiles (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Ensure columns exist in case profiles table was created in an older run
+alter table public.profiles add column if not exists email text;
+alter table public.profiles add column if not exists name text;
+alter table public.profiles add column if not exists created_at timestamp with time zone default timezone('utc'::text, now()) not null;
+
 -- Enable Row Level Security (RLS) on Profiles
 alter table public.profiles enable row level security;
 
