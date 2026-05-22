@@ -6,6 +6,7 @@ import { AIImageStudio } from './dashboard/AIImageStudio';
 import { Calendar } from './dashboard/Calendar';
 import { Analytics } from './dashboard/Analytics';
 import { AdminPanel } from './dashboard/AdminPanel';
+import { Support } from './dashboard/Support';
 
 import { 
   Sparkles, 
@@ -21,7 +22,8 @@ import {
   Cpu,
   User,
   Zap,
-  ShieldAlert
+  ShieldAlert,
+  HelpCircle
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -29,7 +31,7 @@ interface DashboardProps {
   onOpenAuth: () => void;
 }
 
-type TabType = 'writer' | 'studio' | 'calendar' | 'analytics' | 'admin';
+type TabType = 'writer' | 'studio' | 'calendar' | 'analytics' | 'admin' | 'support';
 
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) => {
   const { user, apiKey, setApiKey, sessionUser, toast, clearToast } = useApp();
@@ -71,6 +73,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
         return <Analytics />;
       case 'admin':
         return <AdminPanel />;
+      case 'support':
+        return <Support />;
       default:
         return <AIWriter />;
     }
@@ -83,6 +87,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
       case 'calendar': return 'Social Media Scheduler';
       case 'analytics': return 'Performance & Lead Analytics';
       case 'admin': return 'Subscriber Administration Panel';
+      case 'support': return 'AetherFlow Customer Support';
     }
   };
 
@@ -176,7 +181,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
             <span>Analytics</span>
           </div>
 
-          {(user.email === 'demo@aetherflow.io' || user.email.endsWith('@aetherflow.ai')) && (
+          {user.email === 'harishrsk@gmail.com' && (
             <div 
               onClick={() => setActiveTab('admin')}
               style={{
@@ -189,6 +194,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
               <span>Admin Panel</span>
             </div>
           )}
+
+          <div 
+            onClick={() => setActiveTab('support')}
+            style={{
+              ...navItemStyle,
+              background: activeTab === 'support' ? 'rgba(255,255,255,0.04)' : 'transparent',
+              color: activeTab === 'support' ? 'var(--color-secondary)' : 'var(--text-secondary)'
+            }}
+          >
+            <HelpCircle size={16} />
+            <span>Support</span>
+          </div>
         </nav>
 
         {/* Footer Area with Credit Meter & API Settings */}
