@@ -8,6 +8,8 @@ export interface UserProfile {
   tier: 'free' | 'premium';
   credits: number;
   totalCredits: number;
+  role?: string;
+  isAdmin?: boolean;
 }
 
 export interface WriterHistoryItem {
@@ -161,7 +163,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: 'demo@aetherflow.io',
           tier: 'free',
           credits: 50,
-          totalCredits: 50
+          totalCredits: 50,
+          role: 'user',
+          isAdmin: false
         });
         setWriterHistory([]);
         setStudioImages([]);
@@ -196,7 +200,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: emailVal,
           tier: profile.tier as 'free' | 'premium',
           credits: profile.credits,
-          totalCredits: profile.tier === 'premium' ? 550 : 50
+          totalCredits: profile.tier === 'premium' ? 550 : 50,
+          role: profile.role || 'user',
+          isAdmin: profile.role === 'admin'
         });
         setApiKeyState(profile.api_key || '');
       } else {
@@ -206,7 +212,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: emailVal,
           tier: 'free',
           credits: 50,
-          totalCredits: 50
+          totalCredits: 50,
+          role: 'user',
+          isAdmin: false
         });
       }
 
@@ -297,7 +305,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: emailVal,
           tier: 'free',
           credits: 50,
-          totalCredits: 50
+          totalCredits: 50,
+          role: 'user',
+          isAdmin: false
         });
         showToast('Database Schema Missing: Please run the SQL migration script (supabase_schema.sql) in your Supabase dashboard to enable database syncing.', 'warning');
       } else {

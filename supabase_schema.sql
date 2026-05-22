@@ -13,6 +13,18 @@ create table if not exists public.profiles (
 alter table public.profiles add column if not exists email text;
 alter table public.profiles add column if not exists name text;
 alter table public.profiles add column if not exists created_at timestamp with time zone default timezone('utc'::text, now()) not null;
+alter table public.profiles add column if not exists role text not null default 'user';
+
+-- Helper function to check if the current user is an admin
+create or replace function public.is_admin()
+returns boolean as $$
+begin
+  return exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'admin'
+  );
+end;
+$$ language plpgsql security definer;
 
 -- Enable Row Level Security (RLS) on Profiles
 alter table public.profiles enable row level security;
@@ -21,17 +33,17 @@ alter table public.profiles enable row level security;
 drop policy if exists "Users can view their own profile" on public.profiles;
 create policy "Users can view their own profile"
   on public.profiles for select
-  using (auth.uid() = id or auth.jwt() ->> 'email' = 'harishrsk@gmail.com');
+  using (auth.uid() = id or public.is_admin());
 
 drop policy if exists "Users can update their own profile" on public.profiles;
 create policy "Users can update their own profile"
   on public.profiles for update
-  using (auth.uid() = id or auth.jwt() ->> 'email' = 'harishrsk@gmail.com');
+  using (auth.uid() = id or public.is_admin());
 
 drop policy if exists "Admins can delete profiles" on public.profiles;
 create policy "Admins can delete profiles"
   on public.profiles for delete
-  using (auth.jwt() ->> 'email' = 'harishrsk@gmail.com');
+  using (public.is_admin());
 
 -- 2. Create AI Writer History Table
 create table if not exists public.writer_history (
@@ -49,7 +61,7 @@ alter table public.writer_history enable row level security;
 drop policy if exists "Users can view their own writer history" on public.writer_history;
 create policy "Users can view their own writer history"
   on public.writer_history for select
-  using (auth.uid() = user_id or auth.jwt() ->> 'email' = 'harishrsk@gmail.com');
+  using (auth.uid() = user_id or public.is_admin());
 
 drop policy if exists "Users can insert their own writer history" on public.writer_history;
 create policy "Users can insert their own writer history"
@@ -72,7 +84,7 @@ alter table public.studio_images enable row level security;
 drop policy if exists "Users can view their own studio images" on public.studio_images;
 create policy "Users can view their own studio images"
   on public.studio_images for select
-  using (auth.uid() = user_id or auth.jwt() ->> 'email' = 'harishrsk@gmail.com');
+  using (auth.uid() = user_id or public.is_admin());
 
 drop policy if exists "Users can insert their own studio images" on public.studio_images;
 create policy "Users can insert their own studio images"
@@ -97,7 +109,7 @@ alter table public.calendar_events enable row level security;
 drop policy if exists "Users can view their own calendar events" on public.calendar_events;
 create policy "Users can view their own calendar events"
   on public.calendar_events for select
-  using (auth.uid() = user_id or auth.jwt() ->> 'email' = 'harishrsk@gmail.com');
+  using (auth.uid() = user_id or public.is_admin());
 
 drop policy if exists "Users can insert their own calendar events" on public.calendar_events;
 create policy "Users can insert their own calendar events"
@@ -107,24 +119,54 @@ create policy "Users can insert their own calendar events"
 drop policy if exists "Users can update their own calendar events" on public.calendar_events;
 create policy "Users can update their own calendar events"
   on public.calendar_events for update
-  using (auth.uid() = user_id or auth.jwt() ->> 'email' = 'harishrsk@gmail.com');
+  using (auth.uid() = user_id or public.is_admin());
 
 drop policy if exists "Users can delete their own calendar events" on public.calendar_events;
 create policy "Users can delete their own calendar events"
   on public.calendar_events for delete
-  using (auth.uid() = user_id or auth.jwt() ->> 'email' = 'harishrsk@gmail.com');
+  using (auth.uid() = user_id or public.is_admin());
+-- 5. Create Support Queries Table
+create table if not exists public.support_queries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users on delete cascade,
+  name text not null,
+  email text not null,
+  subject text not null,
+  message text not null,
+  timestamp timestamp with time zone default timezone('utc'::text, now()) not null
+);
 
--- 5. Automate Profile Creation on Registration
+-- Enable RLS on Support Queries
+alter table public.support_queries enable row level security;
+
+-- Policies for Support Queries
+drop policy if exists "Anyone can insert support queries" on public.support_queries;
+create policy "Anyone can insert support queries"
+  on public.support_queries for insert
+  with check (true);
+
+drop policy if exists "Admins can view all support queries" on public.support_queries;
+create policy "Admins can view all support queries"
+  on public.support_queries for select
+  using (public.is_admin());
+
+drop policy if exists "Admins can delete support queries" on public.support_queries;
+create policy "Admins can delete support queries"
+  on public.support_queries for delete
+  using (public.is_admin());
+
+-- 6. Automate Profile Creation on Registration
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, email, name, credits, tier)
+  insert into public.profiles (id, email, name, credits, tier, role)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
     50,
-    'free'
+    'free',
+    'user'
   )
   on conflict (id) do nothing;
   return new;

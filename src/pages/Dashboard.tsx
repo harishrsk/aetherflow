@@ -195,7 +195,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
             <span>Analytics</span>
           </div>
 
-          {user.email === 'harishrsk@gmail.com' && (
+          {(!isSupabaseReady || user.isAdmin) && (
             <div 
               onClick={() => setActiveTab('admin')}
               style={{

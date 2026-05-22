@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { supabase } from '../../utils/supabaseClient';
 import { Mail, MessageSquare, Send, CheckCircle2 } from 'lucide-react';
 
 export const Support: React.FC = () => {
-  const { user, showToast } = useApp();
+  const { user, showToast, isSupabaseReady, sessionUser } = useApp();
   
   const [name, setName] = useState(user.name || '');
   const [email, setEmail] = useState(user.email || '');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!name || !email || !subject || !message) {
@@ -19,25 +21,41 @@ export const Support: React.FC = () => {
       return;
     }
 
-    // Construct Mailto link
-    const mailtoUrl = `mailto:harishrsk@gmail.com?subject=${encodeURIComponent(
-      `[AetherFlow Support] ${subject}`
-    )}&body=${encodeURIComponent(
-      `Support Query details:\n\n` +
-      `From Name: ${name}\n` +
-      `From Email: ${email}\n\n` +
-      `Message:\n${message}\n\n` +
-      `---\nSent via AetherFlow Support Center`
-    )}`;
-
+    setSubmitting(true);
     try {
-      // Trigger redirection
-      window.location.href = mailtoUrl;
+      if (isSupabaseReady) {
+        const { error } = await supabase
+          .from('support_queries')
+          .insert({
+            user_id: sessionUser?.id || null,
+            name,
+            email,
+            subject,
+            message
+          });
+        
+        if (error) throw error;
+      } else {
+        // Fallback simulation mode
+        const queries = JSON.parse(localStorage.getItem('aetherflow_support_queries') || '[]');
+        queries.push({
+          id: Math.random().toString(36).substring(2, 9),
+          name,
+          email,
+          subject,
+          message,
+          timestamp: new Date().toISOString()
+        });
+        localStorage.setItem('aetherflow_support_queries', JSON.stringify(queries));
+      }
+      
       setSubmitted(true);
-      showToast('Redirecting to your default mail client...', 'success');
-    } catch (err) {
+      showToast('Support query submitted successfully.', 'success');
+    } catch (err: any) {
       console.error(err);
-      showToast('Failed to open email client. Please email harishrsk@gmail.com directly.', 'error');
+      showToast(`Failed to submit query: ${err.message || err}`, 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -68,17 +86,17 @@ export const Support: React.FC = () => {
               <Mail size={14} color="var(--color-primary)" />
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Direct Inquiry</div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>harishrsk@gmail.com</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Support Channel</div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Admin Ticket Queue</div>
             </div>
           </div>
 
           <div style={tipBoxStyle}>
             <span style={{ fontWeight: 600, color: 'var(--color-secondary)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
-              💡 System Note
+              💡 Ticket System
             </span>
             <span style={{ fontSize: '10px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-              Upon submission, your query is formatted and loaded into your local email client. Simply click send to dispatch the ticket to the support desk.
+              Upon submission, your query will be registered directly in our administrator ticket queue. The support team will review your request and get back to you shortly.
             </span>
           </div>
         </div>
@@ -89,10 +107,10 @@ export const Support: React.FC = () => {
             <div style={successStateStyle} className="animate-fade-in">
               <CheckCircle2 size={48} color="var(--success)" style={{ marginBottom: '15px' }} />
               <h4 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
-                Query Formatted Successfully!
+                Query Submitted Successfully!
               </h4>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center', lineHeight: '1.6', maxWidth: '300px', marginBottom: '20px' }}>
-                If your browser did not automatically open your mail app, please send your query directly to <strong style={{ color: 'var(--text-primary)' }}>harishrsk@gmail.com</strong>.
+                Your ticket has been registered in the system. The platform administrator will review your query.
               </p>
               <button onClick={handleReset} className="btn btn-secondary" style={{ padding: '8px 16px', fontSize: '12px' }}>
                 Submit Another Query
@@ -153,10 +171,11 @@ export const Support: React.FC = () => {
               <button 
                 type="submit" 
                 className="btn btn-primary"
+                disabled={submitting}
                 style={{ padding: '12px', width: '100%', marginTop: '10px', fontSize: '13px', fontWeight: 600 }}
               >
                 <Send size={14} />
-                <span>Submit Query to Admin</span>
+                <span>{submitting ? 'Submitting query...' : 'Submit Query to Admin'}</span>
               </button>
             </form>
           )}

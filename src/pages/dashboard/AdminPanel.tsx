@@ -29,6 +29,16 @@ interface Subscriber {
   joined: string;
 }
 
+interface SupportQuery {
+  id: string;
+  user_id: string | null;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  timestamp: string;
+}
+
 const INITIAL_MOCK_SUBSCRIBERS: Subscriber[] = [
   {
     id: 'sub-1',
@@ -85,6 +95,9 @@ const INITIAL_MOCK_SUBSCRIBERS: Subscriber[] = [
 export const AdminPanel: React.FC = () => {
   const { showToast, isSupabaseReady } = useApp();
   
+  // Tabs: subscribers directory vs support tickets
+  const [adminTab, setAdminTab] = useState<'subscribers' | 'tickets'>('subscribers');
+  
   // Subscriber list state
   const [subscribers, setSubscribers] = useState<Subscriber[]>(INITIAL_MOCK_SUBSCRIBERS);
   const [dbSubscribers, setDbSubscribers] = useState<Subscriber[]>([]);
@@ -93,6 +106,11 @@ export const AdminPanel: React.FC = () => {
   const [viewMode, setViewMode] = useState<'sandbox' | 'database'>(isSupabaseReady ? 'database' : 'sandbox');
   const [dbError, setDbError] = useState<string | null>(null);
   const [isLoadingDb, setIsLoadingDb] = useState(false);
+  
+  // Support Tickets State
+  const [tickets, setTickets] = useState<SupportQuery[]>([]);
+  const [isLoadingTickets, setIsLoadingTickets] = useState(false);
+  const [ticketsError, setTicketsError] = useState<string | null>(null);
   
   // Filtering & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -108,6 +126,55 @@ export const AdminPanel: React.FC = () => {
   // Credit update overlay
   const [editingSubId, setEditingSubId] = useState<string | null>(null);
   const [creditAdjustment, setCreditAdjustment] = useState<number>(0);
+
+  // Fetch support tickets
+  const fetchSupportTickets = async () => {
+    setIsLoadingTickets(true);
+    setTicketsError(null);
+    if (viewMode === 'sandbox') {
+      const local = JSON.parse(localStorage.getItem('aetherflow_support_queries') || '[]');
+      setTickets(local);
+      setIsLoadingTickets(false);
+    } else {
+      try {
+        const { data, error } = await supabase
+          .from('support_queries')
+          .select('*')
+          .order('timestamp', { ascending: false });
+        
+        if (error) throw error;
+        setTickets(data || []);
+      } catch (err: any) {
+        console.error('Failed to fetch support tickets:', err);
+        setTicketsError(err.message || 'Failed to load support queries.');
+      } finally {
+        setIsLoadingTickets(false);
+      }
+    }
+  };
+
+  // Delete support ticket
+  const handleDeleteTicket = async (ticketId: string) => {
+    if (viewMode === 'sandbox') {
+      const updated = tickets.filter(t => t.id !== ticketId);
+      setTickets(updated);
+      localStorage.setItem('aetherflow_support_queries', JSON.stringify(updated));
+      showToast('Support ticket deleted from local storage.', 'success');
+    } else {
+      try {
+        const { error } = await supabase
+          .from('support_queries')
+          .delete()
+          .eq('id', ticketId);
+        
+        if (error) throw error;
+        setTickets(prev => prev.filter(t => t.id !== ticketId));
+        showToast('Support ticket deleted successfully.', 'success');
+      } catch (err: any) {
+        showToast(`Failed to delete ticket: ${err.message}`, 'error');
+      }
+    }
+  };
 
   // Load Database profiles
   const fetchDatabaseProfiles = async () => {
@@ -157,6 +224,10 @@ export const AdminPanel: React.FC = () => {
       fetchDatabaseProfiles();
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    fetchSupportTickets();
+  }, [adminTab, viewMode]);
 
   // Actions for modifying subscribers
   const handleUpdateCredits = async (subId: string, change: number) => {
@@ -396,8 +467,36 @@ export const AdminPanel: React.FC = () => {
         )}
       </div>
 
-      {/* Metrics Row */}
-      <div style={metricsGridStyle}>
+      {/* Tab Switcher */}
+      <div style={tabContainerStyle}>
+        <button 
+          onClick={() => setAdminTab('subscribers')}
+          style={{
+            ...subTabButtonStyle,
+            borderBottom: adminTab === 'subscribers' ? '2px solid var(--color-primary)' : '2px solid transparent',
+            color: adminTab === 'subscribers' ? 'var(--text-primary)' : 'var(--text-muted)'
+          }}
+        >
+          <Users size={14} />
+          <span>Subscribers Directory</span>
+        </button>
+        <button 
+          onClick={() => setAdminTab('tickets')}
+          style={{
+            ...subTabButtonStyle,
+            borderBottom: adminTab === 'tickets' ? '2px solid var(--color-secondary)' : '2px solid transparent',
+            color: adminTab === 'tickets' ? 'var(--text-primary)' : 'var(--text-muted)'
+          }}
+        >
+          <Mail size={14} />
+          <span>Support Tickets ({tickets.length})</span>
+        </button>
+      </div>
+
+      {adminTab === 'subscribers' ? (
+        <>
+          {/* Metrics Row */}
+          <div style={metricsGridStyle}>
         <div className="glass" style={metricCardStyle}>
           <div style={metricHeaderStyle}>
             <div style={iconBoxStyle('var(--color-primary)')}>
@@ -763,6 +862,97 @@ export const AdminPanel: React.FC = () => {
           </div>
         </div>
       </div>
+        </>
+      ) : (
+        <div className="glass animate-fade-in" style={tableCardStyle}>
+          <div style={tableHeaderControlsStyle}>
+            <div>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Mail size={16} color="var(--color-secondary)" />
+                Support Tickets Inbox
+              </h3>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Manage user support tickets and query logs.
+              </p>
+            </div>
+            
+            <button 
+              onClick={fetchSupportTickets}
+              className="btn btn-secondary"
+              style={{ padding: '8px 16px', fontSize: '11px' }}
+              disabled={isLoadingTickets}
+            >
+              {isLoadingTickets ? 'Refreshing...' : 'Refresh Inbox'}
+            </button>
+          </div>
+
+          {isLoadingTickets ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px', flexDirection: 'column', gap: '10px' }}>
+              <div className="loader" style={{ width: '24px', height: '24px' }}></div>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Retrieving support requests...</span>
+            </div>
+          ) : ticketsError ? (
+            <div style={dbNoticeBoxStyle}>
+              <ShieldAlert size={16} color="var(--danger)" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                <strong style={{ color: 'var(--danger)' }}>Access Error:</strong> {ticketsError}
+                <div style={{ marginTop: '6px' }}>
+                  💡 Ensure the <code>support_queries</code> table is deployed in Supabase and your account has permissions to select rows.
+                </div>
+              </div>
+            </div>
+          ) : tickets.length === 0 ? (
+            <div style={tableEmptyStateStyle}>
+              <Mail size={32} style={{ color: 'var(--text-muted)', marginBottom: '10px', display: 'block', margin: '0 auto' }} />
+              <span>Support inbox is clean! No pending queries found.</span>
+            </div>
+          ) : (
+            <div style={ticketListStyle}>
+              {tickets.map(ticket => (
+                <div className="glass" key={ticket.id} style={ticketCardItemStyle}>
+                  <div style={ticketHeaderStyle}>
+                    <div style={{ flex: 1 }}>
+                      <span style={ticketSubjectStyle}>{ticket.subject}</span>
+                      <div style={ticketMetaRowStyle}>
+                        <span style={ticketMetaItemStyle}>From: <strong>{ticket.name}</strong> ({ticket.email})</span>
+                        <span style={ticketMetaItemStyle}>•</span>
+                        <span style={ticketMetaItemStyle}>{new Date(ticket.timestamp).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (confirm('Mark this support ticket as resolved and delete it?')) {
+                          handleDeleteTicket(ticket.id);
+                        }
+                      }}
+                      style={resolveButtonStyle}
+                      title="Resolve & Remove Ticket"
+                    >
+                      <Trash2 size={12} />
+                      <span>Resolve</span>
+                    </button>
+                  </div>
+                  
+                  <div style={ticketBodyStyle}>
+                    {ticket.message}
+                  </div>
+                  
+                  <div style={ticketFooterStyle}>
+                    <a 
+                      href={`mailto:${ticket.email}?subject=Re: ${encodeURIComponent(ticket.subject)}`}
+                      className="btn btn-secondary"
+                      style={{ padding: '6px 12px', fontSize: '11px', gap: '6px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', color: 'var(--text-primary)' }}
+                    >
+                      <Mail size={12} />
+                      Reply via Email
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   );
@@ -1067,4 +1257,103 @@ const guideParagraphStyle: React.CSSProperties = {
   fontSize: '11px',
   color: 'var(--text-muted)',
   lineHeight: '1.5'
+};
+
+const tabContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '16px',
+  borderBottom: '1px solid var(--border-color)',
+  paddingBottom: '2px',
+  marginBottom: '20px'
+};
+
+const subTabButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  padding: '8px 16px',
+  fontSize: '13px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  transition: 'all var(--transition-fast)',
+  outline: 'none'
+};
+
+const ticketListStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '16px',
+  marginTop: '15px'
+};
+
+const ticketCardItemStyle: React.CSSProperties = {
+  padding: '20px',
+  background: 'rgba(255,255,255,0.01)',
+  borderLeft: '4px solid var(--color-secondary)',
+  borderRadius: '8px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px'
+};
+
+const ticketHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  gap: '16px',
+  marginBottom: '8px'
+};
+
+const ticketSubjectStyle: React.CSSProperties = {
+  fontSize: '14px',
+  fontWeight: 700,
+  color: 'var(--text-primary)',
+  display: 'block'
+};
+
+const ticketMetaRowStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  fontSize: '11px',
+  color: 'var(--text-secondary)',
+  marginTop: '4px',
+  flexWrap: 'wrap'
+};
+
+const ticketMetaItemStyle: React.CSSProperties = {
+  color: 'var(--text-muted)'
+};
+
+const resolveButtonStyle: React.CSSProperties = {
+  background: 'rgba(239, 68, 68, 0.05)',
+  border: '1px solid rgba(239, 68, 68, 0.15)',
+  borderRadius: '6px',
+  padding: '6px 12px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  cursor: 'pointer',
+  outline: 'none',
+  transition: 'all var(--transition-fast)',
+  color: 'var(--danger)',
+  fontSize: '11px'
+};
+
+const ticketBodyStyle: React.CSSProperties = {
+  fontSize: '12px',
+  color: 'var(--text-primary)',
+  lineHeight: '1.6',
+  whiteSpace: 'pre-wrap',
+  background: 'rgba(0,0,0,0.15)',
+  padding: '12px',
+  borderRadius: '6px',
+  border: '1px solid rgba(255, 255, 255, 0.02)'
+};
+
+const ticketFooterStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'flex-start',
+  marginTop: '4px'
 };
