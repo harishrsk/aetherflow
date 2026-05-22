@@ -5,6 +5,7 @@ import { AIWriter } from './dashboard/AIWriter';
 import { AIImageStudio } from './dashboard/AIImageStudio';
 import { Calendar } from './dashboard/Calendar';
 import { Analytics } from './dashboard/Analytics';
+import { AdminPanel } from './dashboard/AdminPanel';
 
 import { 
   Sparkles, 
@@ -19,7 +20,8 @@ import {
   Check, 
   Cpu,
   User,
-  Zap
+  Zap,
+  ShieldAlert
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -27,7 +29,7 @@ interface DashboardProps {
   onOpenAuth: () => void;
 }
 
-type TabType = 'writer' | 'studio' | 'calendar' | 'analytics';
+type TabType = 'writer' | 'studio' | 'calendar' | 'analytics' | 'admin';
 
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) => {
   const { user, apiKey, setApiKey, sessionUser, toast, clearToast } = useApp();
@@ -67,6 +69,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
         return <Calendar />;
       case 'analytics':
         return <Analytics />;
+      case 'admin':
+        return <AdminPanel />;
       default:
         return <AIWriter />;
     }
@@ -78,6 +82,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
       case 'studio': return 'Creative Image Studio';
       case 'calendar': return 'Social Media Scheduler';
       case 'analytics': return 'Performance & Lead Analytics';
+      case 'admin': return 'Subscriber Administration Panel';
     }
   };
 
@@ -170,6 +175,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
             <BarChart3 size={16} />
             <span>Analytics</span>
           </div>
+
+          {(user.email === 'demo@aetherflow.io' || user.email.endsWith('@aetherflow.ai')) && (
+            <div 
+              onClick={() => setActiveTab('admin')}
+              style={{
+                ...navItemStyle,
+                background: activeTab === 'admin' ? 'rgba(255,255,255,0.04)' : 'transparent',
+                color: activeTab === 'admin' ? 'var(--color-primary)' : 'var(--text-secondary)'
+              }}
+            >
+              <ShieldAlert size={16} />
+              <span>Admin Panel</span>
+            </div>
+          )}
         </nav>
 
         {/* Footer Area with Credit Meter & API Settings */}
