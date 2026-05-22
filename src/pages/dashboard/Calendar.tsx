@@ -10,7 +10,7 @@ const PLATFORMS = [
 ];
 
 export const Calendar: React.FC = () => {
-  const { calendarEvents, addCalendarEvent, deleteCalendarEvent, toggleEventStatus } = useApp();
+  const { calendarEvents, addCalendarEvent, deleteCalendarEvent, toggleEventStatus, apiKey, showToast } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [content, setContent] = useState('');
   const [platform, setPlatform] = useState<'twitter' | 'linkedin' | 'facebook' | 'instagram'>('twitter');
@@ -51,32 +51,49 @@ export const Calendar: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleEnhanceHashtags = () => {
+  const handleEnhanceHashtags = async () => {
     if (!content.trim() || isEnhancing) return;
     setIsEnhancing(true);
 
-    setTimeout(() => {
-      const hashtagsMap: Record<string, string> = {
-        marketing: ' #marketing #growth #digital',
-        saas: ' #saas #founder #buildinpublic',
-        code: ' #programming #developer #webdev',
-        default: ' #innovation #creativity #automation'
-      };
+    const activeApiKey = apiKey || import.meta.env.VITE_GEMINI_API_KEY;
+    if (activeApiKey) {
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeApiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `Add 3 relevant, highly engaging social media hashtags to the end of this post content. Return ONLY the hashtags separated by single spaces (e.g. "#marketing #saas #social"), with a leading space. Do not include any explanations, introductory text, or markdown.
+                Post content: "${content}"`
+              }]
+            }]
+          })
+        });
 
-      const lowerContent = content.toLowerCase();
-      let match = hashtagsMap.default;
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error?.message || `API returned status ${response.status}`);
+        }
 
-      if (lowerContent.includes('marketing') || lowerContent.includes('sale') || lowerContent.includes('lead')) {
-        match = hashtagsMap.marketing;
-      } else if (lowerContent.includes('saas') || lowerContent.includes('software') || lowerContent.includes('founder')) {
-        match = hashtagsMap.saas;
-      } else if (lowerContent.includes('code') || lowerContent.includes('app') || lowerContent.includes('build')) {
-        match = hashtagsMap.code;
+        const tags = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        if (tags.trim()) {
+          const formattedTags = tags.startsWith(' ') ? tags : ' ' + tags;
+          setContent(prev => prev + formattedTags.trimEnd());
+          showToast('Hashtags optimized successfully.', 'success');
+        } else {
+          showToast('Model returned empty hashtags.', 'warning');
+        }
+      } catch (err: any) {
+        console.error("Gemini Hashtag Optimization Error:", err);
+        showToast(`Failed to optimize hashtags: ${err.message || err}`, 'error');
+      } finally {
+        setIsEnhancing(false);
       }
-
-      setContent(prev => prev + match);
+    } else {
+      showToast('Developer key missing! Please configure your Gemini API Key in the "Developer Keys" sidebar panel to enable hashtag optimization.', 'error');
       setIsEnhancing(false);
-    }, 800);
+    }
   };
 
   // Group events by date

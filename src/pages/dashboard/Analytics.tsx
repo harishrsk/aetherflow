@@ -6,6 +6,10 @@ export const Analytics: React.FC = () => {
   const { user, writerHistory, studioImages } = useApp();
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
 
+  const trafficGenerated = 10000 + (writerHistory.length * 250) + (studioImages.length * 400);
+  const leadConversions = Math.round(trafficGenerated * 0.147);
+  const estValueGenerated = Math.round(leadConversions * 2.62);
+
   // Base traffic clicks over 6 weeks
   const baseTraffic = [240, 480, 390, 680, 890, 1240];
   
@@ -98,7 +102,7 @@ export const Analytics: React.FC = () => {
             </div>
             <span style={percentageUpStyle}>+28.4%</span>
           </div>
-          <div style={metricValueStyle}>12,480</div>
+          <div style={metricValueStyle}>{trafficGenerated.toLocaleString()}</div>
           <div style={metricLabelStyle}>Traffic Generated</div>
         </div>
 
@@ -109,7 +113,7 @@ export const Analytics: React.FC = () => {
             </div>
             <span style={percentageUpStyle}>+16.2%</span>
           </div>
-          <div style={metricValueStyle}>1,840</div>
+          <div style={metricValueStyle}>{leadConversions.toLocaleString()}</div>
           <div style={metricLabelStyle}>Total Lead Conversions</div>
         </div>
 
@@ -131,7 +135,7 @@ export const Analytics: React.FC = () => {
             </div>
             <span style={percentageUpStyle}>+8.4x</span>
           </div>
-          <div style={metricValueStyle}>$4,820</div>
+          <div style={metricValueStyle}>${estValueGenerated.toLocaleString()}</div>
           <div style={metricLabelStyle}>Est. Value Generated</div>
         </div>
 

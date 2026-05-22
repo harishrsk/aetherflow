@@ -34,9 +34,23 @@ interface DashboardProps {
 type TabType = 'writer' | 'studio' | 'calendar' | 'analytics' | 'admin' | 'support';
 
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) => {
-  const { user, apiKey, setApiKey, sessionUser, toast, clearToast } = useApp();
+  const { user, apiKey, setApiKey, sessionUser, toast, clearToast, isSupabaseReady } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('writer');
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationsRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   React.useEffect(() => {
     const handleSwitchTab = (e: Event) => {
@@ -326,9 +340,169 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, onOpenAuth }) =>
             </div>
 
             {/* Notifications */}
-            <div style={iconBadgeContainerStyle}>
-              <Bell size={16} />
-              <div style={badgePulseStyle}></div>
+            <div ref={notificationsRef} style={{ position: 'relative' }}>
+              <div 
+                onClick={() => setShowNotifications(!showNotifications)}
+                style={iconBadgeContainerStyle}
+                title="Workspace Status & Notifications"
+              >
+                <Bell size={16} />
+                <div style={badgePulseStyle}></div>
+              </div>
+              
+              {showNotifications && (
+                <div className="glass" style={notificationDropdownStyle}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', paddingBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Bell size={14} color="var(--color-primary)" />
+                      <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>Workspace Status</span>
+                    </div>
+                    <span 
+                      style={{ fontSize: '10px', color: 'var(--text-muted)', cursor: 'pointer' }}
+                      onClick={() => setShowNotifications(false)}
+                    >
+                      Close
+                    </span>
+                  </div>
+
+                  {/* Body Content */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {/* Database Status */}
+                    <div style={notificationItemStyle}>
+                      <div style={notificationIconWrapperStyle(isSupabaseReady ? 'success' : 'warning')}>
+                        <Cpu size={12} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>Database Connection</div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                          {isSupabaseReady 
+                            ? 'Cloud Synchronization: Operational.' 
+                            : 'Sandbox Mode (Offline/Placeholder)'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* API Key Status */}
+                    <div style={notificationItemStyle}>
+                      <div style={notificationIconWrapperStyle(apiKey ? 'secondary' : import.meta.env.VITE_GEMINI_API_KEY ? 'primary' : 'danger')}>
+                        <Key size={12} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>Gemini AI Credentials</div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                          {apiKey 
+                            ? 'Using custom Developer Key.' 
+                            : import.meta.env.VITE_GEMINI_API_KEY 
+                              ? 'Using system fallback key.' 
+                              : 'API key completely missing.'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* User Session status */}
+                    <div style={notificationItemStyle}>
+                      <div style={notificationIconWrapperStyle(sessionUser ? 'indigo' : 'muted')}>
+                        <User size={12} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>Auth Session</div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
+                          {sessionUser 
+                            ? `User: ${sessionUser.email}` 
+                            : 'Guest (local sandbox)'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Credit Status alerts */}
+                    <div style={notificationItemStyle}>
+                      <div style={notificationIconWrapperStyle(user.credits < 15 ? 'danger' : 'success')}>
+                        <Zap size={12} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>Credit Pools</div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                          {user.credits < 15 
+                            ? `Low credit alert: ${user.credits} remaining.` 
+                            : `${user.credits} of ${user.totalCredits} credits available.`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Action Footer */}
+                  <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {!sessionUser && (
+                      <button 
+                        onClick={() => {
+                          setShowNotifications(false);
+                          onOpenAuth();
+                        }}
+                        style={{
+                          width: '100%',
+                          background: 'rgba(139, 92, 246, 0.25)',
+                          border: '1px solid rgba(139, 92, 246, 0.4)',
+                          color: '#ffffff',
+                          borderRadius: '6px',
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          outline: 'none',
+                          textAlign: 'center'
+                        }}
+                      >
+                        Sign In to Cloud Sync
+                      </button>
+                    )}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={() => {
+                          setShowNotifications(false);
+                          setShowApiSettings(true);
+                        }}
+                        style={{
+                          flex: 1,
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          color: 'var(--text-primary)',
+                          borderRadius: '6px',
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          outline: 'none',
+                          textAlign: 'center'
+                        }}
+                      >
+                        Manage Keys
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setShowNotifications(false);
+                          setActiveTab('support');
+                        }}
+                        style={{
+                          flex: 1,
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          color: 'var(--text-primary)',
+                          borderRadius: '6px',
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          outline: 'none',
+                          textAlign: 'center'
+                        }}
+                      >
+                        Get Support
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {user.tier === 'free' && (
@@ -667,4 +841,57 @@ const tabBodyStyle: React.CSSProperties = {
   padding: '30px',
   overflowY: 'auto',
   position: 'relative'
+};
+
+const getIconColor = (type: 'success' | 'warning' | 'danger' | 'primary' | 'secondary' | 'indigo' | 'muted') => {
+  switch (type) {
+    case 'success': return '#10b981';
+    case 'warning': return '#f59e0b';
+    case 'danger': return '#ef4444';
+    case 'primary': return '#8b5cf6';
+    case 'secondary': return '#06b6d4';
+    case 'indigo': return '#6366f1';
+    default: return '#64748b';
+  }
+};
+
+const notificationDropdownStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: 'calc(100% + 10px)',
+  right: 0,
+  width: '320px',
+  background: 'rgba(10, 10, 16, 0.95)',
+  backdropFilter: 'blur(16px)',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
+  borderRadius: '12px',
+  boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(139, 92, 246, 0.05)',
+  padding: '16px',
+  zIndex: 100,
+  cursor: 'default'
+};
+
+const notificationItemStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: '10px',
+  padding: '8px',
+  borderRadius: '8px',
+  background: 'rgba(255, 255, 255, 0.01)',
+  border: '1px solid rgba(255, 255, 255, 0.02)'
+};
+
+const notificationIconWrapperStyle = (type: 'success' | 'warning' | 'danger' | 'primary' | 'secondary' | 'indigo' | 'muted'): React.CSSProperties => {
+  const color = getIconColor(type);
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    background: `${color}1a`,
+    color: color,
+    flexShrink: 0,
+    marginTop: '2px'
+  };
 };

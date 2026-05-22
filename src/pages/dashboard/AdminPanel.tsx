@@ -83,14 +83,14 @@ const INITIAL_MOCK_SUBSCRIBERS: Subscriber[] = [
 ];
 
 export const AdminPanel: React.FC = () => {
-  const { showToast } = useApp();
+  const { showToast, isSupabaseReady } = useApp();
   
   // Subscriber list state
   const [subscribers, setSubscribers] = useState<Subscriber[]>(INITIAL_MOCK_SUBSCRIBERS);
   const [dbSubscribers, setDbSubscribers] = useState<Subscriber[]>([]);
   
   // View options
-  const [viewMode, setViewMode] = useState<'sandbox' | 'database'>('sandbox');
+  const [viewMode, setViewMode] = useState<'sandbox' | 'database'>(isSupabaseReady ? 'database' : 'sandbox');
   const [dbError, setDbError] = useState<string | null>(null);
   const [isLoadingDb, setIsLoadingDb] = useState(false);
   
@@ -122,18 +122,17 @@ export const AdminPanel: React.FC = () => {
       
       if (data) {
         // Map database profiles to Subscribers model.
-        // Profiles don't store name/email, so synthesize placeholder data based on uuid.
         const mapped: Subscriber[] = data.map((profile: any) => {
           const idShort = profile.id.substring(0, 5);
           return {
             id: profile.id,
-            name: `DB Profile ${idShort}`,
-            email: `user_${idShort}@aetherflow-cloud.io`,
+            name: profile.name || `DB Profile ${idShort}`,
+            email: profile.email || `user_${idShort}@aetherflow-cloud.io`,
             tier: (profile.tier || 'free') as 'free' | 'premium',
             credits: profile.credits ?? 50,
             totalCredits: profile.tier === 'premium' ? 550 : 50,
             api_key: profile.api_key || null,
-            joined: new Date().toISOString().split('T')[0] // Fallback join date
+            joined: profile.created_at ? new Date(profile.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
           };
         });
         setDbSubscribers(mapped);

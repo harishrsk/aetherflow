@@ -33,33 +33,6 @@ export const AIWriter: React.FC = () => {
     imagePrompt: string;
   } | null>(null);
 
-  const generateMockConductor = (objective: string) => {
-    const key = objective.toLowerCase();
-    let googleAds = '';
-    let linkedin = '';
-    let twitter = '';
-    let imagePrompt = '';
-
-    if (key.includes('bottle') || key.includes('water') || key.includes('drink')) {
-      googleAds = `Headline 1: Ice-Cold Hydration For 48 Hours\nHeadline 2: Zero Waste Stainless Bottle\nHeadline 3: Ditch Plastic Today\n\nDescription 1: Double-walled vacuum insulated steel keeps ice crisp. Lifetime guarantee.\nDescription 2: Stop buying single-use plastic. Upgrade to sustainable premium hydration. Shop now.`;
-      linkedin = `I used to buy 3 plastic water bottles a day. That's 1,095 bottles a year.\n\nNot only was it destroying my wallet, it was filling landfills.\n\nSo we designed something better. Double-walled stainless steel that keeps ice solid for 48 hours. Here's what we learned about sustainable hardware design in 2026... 👇`;
-      twitter = `1/ We spent 14 months re-engineering the daily water bottle.\n\nWhy? Because modern thermoses either leak, smell, or fail to stay cold.\n\nHere is how we solved vacuum insulation using dual-walled premium steel: 🧵\n\n2/ The secret is in the copper lining. By adding a micro-layer of reflective copper between the double walls, thermal transfer drops to near zero.\n\nDrinks stay ice-cold for 48 hours.\n\n3/ Today we are officially launching. Zero plastic, 100% lifetime warranty. Get 10% off today: aetherflow.io/refill`;
-      imagePrompt = `A sleek metallic stainless steel water bottle sitting on a glowing neon wet surface, futuristic product photography, dramatic cyan and magenta studio lighting, 3D render, highly detailed`;
-    } else if (key.includes('seo') || key.includes('traffic') || key.includes('blog') || key.includes('rank')) {
-      googleAds = `Headline 1: Rank #1 on Google in 30 Days\nHeadline 2: Automated SEO Writer\nHeadline 3: Double Organic Search traffic\n\nDescription 1: Create search-optimized content in seconds. Stop paying expensive agency retainers.\nDescription 2: Let our AI analyze search intent and write copy that drives high-intent clicks.`;
-      linkedin = `SEO is dead. Or is it?\n\nMost founders are writing 2,000-word blog posts that get exactly zero visits from Google. The algorithm has changed.\n\nHere is our exact 3-step playbook that generated 120,000 visitors without spending a single dollar on ads... 🧵`;
-      twitter = `1/ Google just changed their search algorithm again. Most blogs saw a 40% drop in traffic.\n\nBut our traffic actually went UP. \n\nHere is the semantic depth strategy we are using to dominate search results in 2026: 🧵\n\n2/ It's no longer about keyword stuffing. Search engines evaluate "Entities" and "User Intent".\n\nIf you answer the query in the first 100 words, you win. If you bury it, you lose.\n\n3/ We automated this entire intent-matching structure in AetherFlow. Write less, rank higher, save time.`;
-      imagePrompt = `A colorful futuristic 3D bar chart growing upwards, glowing holographic search bar above it, dark cyber background, vibrant purple accents, high tech rendering, 4k`;
-    } else {
-      googleAds = `Headline 1: Supercharge ${objective || 'Your Launch'}\nHeadline 2: AI-Powered Campaign Conductor\nHeadline 3: Orchestrate Marketing In 1 Click\n\nDescription 1: Turn hours of manual campaign orchestration into seconds of parallel copy generation.\nDescription 2: Automatically write ads, hooks, threads, and generate prompt tokens. Get started free.`;
-      linkedin = `We just built a campaign orchestrator that does the work of an entire growth marketing team in 30 seconds.\n\nNo more context switching between writing, images, and planners. You input an objective, and it outputs cross-channel campaigns in parallel.\n\nHere is how we are structuring our multi-agent flow:`;
-      twitter = `1/ Most marketing teams spend 10+ hours formatting copy across different social channels.\n\nHere is how to automate the entire process using a parallel multi-agent conductor: 🧵\n\n2/ By querying models concurrently with custom system templates, we generate LinkedIn hooks, Twitter threads, Google Ads, and studio prompts in one pass.\n\n3/ Try it out yourself on AetherFlow. Bundled at a flat fee of 15 credits. Start launching faster.`;
-      imagePrompt = `A glowing purple and indigo neural network constellation mapping out into four vibrant nodes, dark futuristic glassmorphism style, digital vector art, octane render`;
-    }
-
-    return { googleAds, linkedin, twitter, imagePrompt };
-  };
-
   const handleOrchestrate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!campaignObjective.trim()) return;
@@ -76,13 +49,14 @@ export const AIWriter: React.FC = () => {
     }
 
     const campaignId = Math.random().toString(36).substring(2, 9);
+    const activeApiKey = apiKey || import.meta.env.VITE_GEMINI_API_KEY;
     let finalGoogleAds = '';
     let finalLinkedin = '';
     let finalTwitter = '';
     let finalImagePrompt = '';
 
     const fetchGemini = async (templateName: string, promptText: string): Promise<string> => {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeApiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -104,7 +78,7 @@ export const AIWriter: React.FC = () => {
       return text;
     };
 
-    if (apiKey) {
+    if (activeApiKey) {
       try {
         const adsPrompt = `Write a Google Ads Search cluster (3 Headlines of max 30 chars, and 2 Descriptions of max 90 chars) for this campaign objective: ${campaignObjective}. Format it clearly with Headline 1/2/3 and Description 1/2. Keep it concise, professional, and high CTR.`;
         const liPrompt = `Write an engaging LinkedIn story hook/post opening for this campaign objective: ${campaignObjective}. Make it professional, compelling, and formatted with line breaks for readability. Limit to 100 words.`;
@@ -135,13 +109,9 @@ export const AIWriter: React.FC = () => {
         return; // Halt and preserve credits
       }
     } else {
-      // Simulate generator - consume credits and use local fallback
-      consumeCredits(15);
-      const mockResult = generateMockConductor(campaignObjective);
-      finalGoogleAds = mockResult.googleAds;
-      finalLinkedin = mockResult.linkedin;
-      finalTwitter = mockResult.twitter;
-      finalImagePrompt = mockResult.imagePrompt;
+      setErrorMsg('Developer key missing! Please configure your Gemini API Key in the "Developer Keys" sidebar panel to start generating live copy.');
+      setIsOrchestrating(false);
+      return;
     }
 
     // Parallel typing simulation effect for UX
@@ -190,44 +160,6 @@ export const AIWriter: React.FC = () => {
     }, 15);
   };
 
-  const generateMockText = (template: string, promptText: string): string => {
-    const key = promptText.toLowerCase();
-    
-    // Custom responses based on keywords in the prompt to make it look incredibly realistic!
-    if (key.includes('bottle') || key.includes('water') || key.includes('drink')) {
-      if (template === 'Google Ads Search') {
-        return `Headline: Ice-Cold Hydration For 48 Hours\nHeadline: Zero Waste Stainless Steel Bottle\nHeadline: Ditch Plastic, Upgrade to Premium\n\nDescription: Keep your cold drinks crisp and hot drinks steaming. Engineered with dual-wall vacuum steel insulation. Lifetime guarantee. Shop our collections today with 10% off.`;
-      }
-      if (template === 'LinkedIn Hook') {
-        return `I used to buy 3 plastic water bottles a day. \n\nThat's 1,095 bottles a year. Not only was it destroying my wallet ($2,190/yr!), it was filling up landfills. \n\nSo we designed something better. Double-walled stainless steel that keeps ice solid for 48 hours. Here's what we learned about sustainable hardware design in 2026... 👇`;
-      }
-      return `Product Pitch: The ultimate vacuum-insulated thermal flask. Keeps beverages freezing cold for 48 hours or piping hot for 24. Sleek ergonomic design with a powder-coated sweat-proof finish. Protect the planet, one refill at a time.`;
-    }
-
-    if (key.includes('seo') || key.includes('traffic') || key.includes('blog') || key.includes('rank')) {
-      if (template === 'Google Ads Search') {
-        return `Headline: Rank #1 on Google in 30 Days\nHeadline: Automated SEO Content Writer\nHeadline: Generate Organic Traffic Free\n\nDescription: Create search-optimized content in seconds. Stop paying expensive SEO agencies. Let our intelligence engine write copy that drives high-intent clicks. Start free.`;
-      }
-      return `LinkedIn Hook: SEO is dead. Or is it? \n\nMost founders are writing 2,000-word blog posts that get exactly zero visits from Google. The algorithm has changed. Now it's about semantic depth and intent matching. \n\nHere is our exact 3-step playbook that generated 120,000 visitors without spending a dollar on ads... 🧵`;
-    }
-
-    // Default responses if no keywords match
-    switch (template) {
-      case 'Google Ads Search':
-        return `Headline: Supercharge ${promptText || 'Your Project'} with AI\nHeadline: Scale Marketing Automation\nHeadline: 10x Content Speed in 1 Click\n\nDescription: Turn hours of manual copywriting into seconds of automated generation. Designed for startup marketing, social scheduling, and conversion optimization. Start free today.`;
-      case 'LinkedIn Hook':
-        return `We just built an AI workflow that saved our team 35 hours a week. \n\nNo, it's not a generic prompt wrapper. We integrated copywriting with calendar workflows. \n\nHere is how automation is restructuring the modern content stack, and why founders who don't adapt will get left behind:`;
-      case 'Product Pitch':
-        return `Pitch: Scale ${promptText || 'your brand'} with an intelligent creative ecosystem. It automatically matches target tone (witty, persuasive, professional), consumes credits only on execution, and lets teams deploy production-ready campaigns in a fraction of the traditional time.`;
-      case 'Blog Intro':
-        return `Introduction:\nIn the digital age, content velocity is no longer optional. But keeping quality high while scaling output is a bottleneck that stifles growth. In this guide, we dive deep into how automated campaign engines are closing the gap, enabling startups to maintain premium messaging across channels without scaling overhead.`;
-      case 'Twitter/X Thread':
-        return `Hook: Most founders spend 10+ hours a week formatting Twitter threads.\n\nHere is how to automate the entire process using semantic styling chips and AI context pipelines.\n\nA step-by-step masterclass: 🧵`;
-      default:
-        return `Generated copy for: ${promptText}. Formatted targeting ${audience} in a ${tone} tone. Ready for deployment.`;
-    }
-  };
-
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
@@ -244,11 +176,12 @@ export const AIWriter: React.FC = () => {
     }
 
     let generatedResult = '';
+    const activeApiKey = apiKey || import.meta.env.VITE_GEMINI_API_KEY;
     
     // If Gemini key is set, try using real API (Optional Developer feature!)
-    if (apiKey) {
+    if (activeApiKey) {
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeApiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -287,9 +220,9 @@ export const AIWriter: React.FC = () => {
         return; // Halt and preserve credits
       }
     } else {
-      // Simulate generator - consume credits and use local fallback
-      consumeCredits(5);
-      generatedResult = generateMockText(selectedTemplate, prompt);
+      setErrorMsg('Developer key missing! Please configure your Gemini API Key in the "Developer Keys" sidebar panel to start generating live copy.');
+      setIsGenerating(false);
+      return;
     }
 
     let currentText = '';
