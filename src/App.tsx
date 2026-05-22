@@ -18,11 +18,15 @@ function AppContent() {
       const params = new URLSearchParams(hash.substring(1));
       const error = params.get('error');
       const errorDescription = params.get('error_description');
+      const hasAccessToken = params.has('access_token');
       
       if (error || errorDescription) {
         const decodedDesc = errorDescription ? decodeURIComponent(errorDescription).replace(/\+/g, ' ') : '';
         showToast(decodedDesc || error || 'Authentication redirection error', 'error');
         // Clear hash to prevent alert on subsequent refreshes
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      } else if (hasAccessToken) {
+        // Clear successful authentication hash from address bar for clean UX
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
       }
     }
